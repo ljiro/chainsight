@@ -1,0 +1,137 @@
+"""API behaviour that needs no database: liveness, readiness aggregation, error envelope."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from fastapi import APIRouter
+from fastapi.testclient import TestClient
+
+from chainsight_api.health import get_readiness_probes, overall_status
+from chainsight_api.main import create_app
+from chainsight_api.routers.catalog import compute_freshness
+from chainsight_api.schemas.health import ComponentHealth
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    app = create_app()
+
+    boom = APIRouter()
+
+    @boom.get("/__boom")
+    async def _boom() -> None:
+        raise RuntimeError("secret internal detail")
+
+    app.include_router(boom)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+
+
+def _probe(name: str, status: str):  # type: ignore[no-untyped-def]
+    async def probe() -> ComponentHealth:
+        return ComponentHealth(name=name, status=status)  # type: ignore[arg-type]
+
+    return probe
+
+
+def test_liveness(client: TestClient) -> None:
+    r = client.get("/api/v1/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "ChainSight"
+    assert r.headers["X-Request-ID"]
+
+
+def test_request_id_is_propagated_when_valid(client: TestClient) -> None:
+    r = client.get("/api/v1/health", headers={"X-Request-ID": "abc-123"})
+    assert r.headers["X-Request-ID"] == "abc-123"
+
+
+def test_request_id_is_replaced_when_malicious(client: TestClient) -> None:
+    r = client.get("/api/v1/health", headers={"X-Request-ID": "bad id\nInjected: 1"})
+    assert r.headers["X-Request-ID"] != "bad id\nInjected: 1"
+    assert len(r.headers["X-Request-ID"]) == 32
+
+
+@pytest.mark.parametrize(
+    ("states", "expected_overall", "expected_http"),
+    [
+        (["ok", "ok"], "ok", 200),
+        (["ok", "degraded"], "degraded", 200),
+        (["degraded", "error"], "error", 503),
+    ],
+)
+def test_readiness_aggregation(
+    client: TestClient, states: list[str], expected_overall: str, expected_http: int
+) -> None:
+    probes = [_probe(f"c{i}", s) for i, s in enumerate(states)]
+    client.app.dependency_overrides[get_readiness_probes] = lambda: probes  # type: ignore[attr-defined]
+    r = client.get("/api/v1/health/ready")
+    assert r.status_code == expected_http
+    assert r.json()["status"] == expected_overall
+    assert [c["status"] for c in r.json()["components"]] == states
+
+
+def test_overall_status_empty_is_ok() -> None:
+    assert overall_status([]) == "ok"
+
+
+def test_not_found_uses_error_envelope(client: TestClient) -> None:
+    r = client.get("/api/v1/does-not-exist", headers={"X-Request-ID": "rid-1"})
+    assert r.status_code == 404
+    assert r.json() == {
+        "error": {
+            "code": "not_found",
+            "message": "Not Found",
+            "details": None,
+            "request_id": "rid-1",
+        }
+    }
+
+
+def test_validation_error_envelope(client: TestClient) -> None:
+    # Validation happens before the DB dependency is used.
+    r = client.get("/api/v1/data-sources", params={"limit": 0})
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "validation_error"
+    assert any("limit" in d["loc"] for d in err["details"])
+
+
+def test_unhandled_error_does_not_leak_internals(client: TestClient) -> None:
+    r = client.get("/__boom")
+    assert r.status_code == 500
+    assert r.json()["error"]["code"] == "internal_error"
+    assert "secret internal detail" not in r.text
+
+
+def test_openapi_is_served(client: TestClient) -> None:
+    r = client.get("/api/v1/openapi.json")
+    assert r.status_code == 200
+    paths = r.json()["paths"]
+    assert {
+        "/api/v1/health",
+        "/api/v1/health/ready",
+        "/api/v1/data-sources",
+        "/api/v1/carriers",
+    } <= set(paths)
+
+
+NOW = datetime(2026, 11, 25, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("last", "interval", "expected"),
+    [
+        (None, 60, "never"),
+        (NOW - timedelta(seconds=30), None, "unknown"),
+        (NOW - timedelta(seconds=119), 60, "fresh"),
+        (NOW - timedelta(seconds=121), 60, "stale"),
+    ],
+)
+def test_compute_freshness(last: datetime | None, interval: int | None, expected: str) -> None:
+    assert compute_freshness(last, interval, NOW) == expected
