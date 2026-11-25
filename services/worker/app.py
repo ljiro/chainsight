@@ -6,9 +6,20 @@ Run beat:      celery -A services.worker.app beat -l INFO
 
 from __future__ import annotations
 
-from celery import Celery
+from typing import Any
 
+from celery import Celery
+from celery.signals import setup_logging
+
+from core.logging_config import configure_logging
 from core.settings import get_settings
+
+
+@setup_logging.connect  # type: ignore[untyped-decorator]  # celery is untyped
+def _configure_worker_logging(**_: Any) -> None:
+    # Replaces Celery's logging setup so worker/beat logs match the API's structured format.
+    s = get_settings()
+    configure_logging(s.log_level, s.log_format)
 
 
 def create_celery() -> Celery:
