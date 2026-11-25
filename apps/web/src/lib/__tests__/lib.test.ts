@@ -4,7 +4,7 @@ import { isActive } from "@/lib/nav";
 import { formatAge, humanize } from "@/lib/utils";
 
 const json = (status: number, body: unknown) =>
-  vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status })));
+  vi.fn<typeof fetch>(() => Promise.resolve(new Response(JSON.stringify(body), { status })));
 
 describe("apiGet", () => {
   it("prefixes the versioned API path", async () => {
