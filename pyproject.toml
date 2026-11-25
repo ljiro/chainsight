@@ -1,0 +1,76 @@
+[project]
+name = "chainsight"
+version = "0.1.0"
+description = "Open-source maritime intelligence and quantitative analytics platform"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9,<3",
+  "pydantic-settings>=2.6,<3",
+  "sqlalchemy[asyncio]>=2.0.36,<2.1",
+  "alembic>=1.14,<2",
+  "psycopg[binary]>=3.2,<4",
+  "geoalchemy2>=0.16,<1",
+  "redis>=5.2,<6",
+  "celery[redis]>=5.4,<6",
+  "structlog>=24.4",
+  "httpx>=0.28,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+  "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Modular monolith: one distribution, several top-level packages (see ADR-001).
+packages = [
+  "core",
+  "database",
+  "integrations",
+  "services",
+  "ml",
+  "apps/api/chainsight_api",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "integration: requires a PostgreSQL/PostGIS database (set TEST_DATABASE_URL)",
+]
+filterwarnings = ["error::DeprecationWarning:chainsight_api.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["apps/web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "DTZ", "RUF"]
+ignore = ["S101"]  # asserts are fine in tests
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "database", "integrations", "services", "ml", "chainsight_api"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "DTZ"]
+"database/migrations/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+ignore_missing_imports = true
+exclude = ["database/migrations/", "apps/web/"]
