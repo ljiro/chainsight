@@ -21,14 +21,14 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] Alembic `0001_foundation` (orgs, users, members, api_keys, carriers, carrier_integrations, carrier_integration_logs, data_sources, ingestion_logs, ports, system_alerts, audit_logs; PostGIS; optional TimescaleDB) — applied on PostGIS 3.7 / TimescaleDB 2.32; up/down/up round-trip tested
 - [x] Alembic `0002_reference_data` (carriers, platform carrier integrations, data sources)
 - [x] FastAPI: request IDs, error envelope, `/api/v1/health`, `/api/v1/health/ready`, `/api/v1/data-sources`, `/api/v1/carriers`, OpenAPI — unit + integration tested, verified live
-- [~] Celery app + heartbeat task + beat schedule — eager-mode tested; worker connects to Redis and registers the task; scheduled execution not yet confirmed in the logs
+- [x] Celery app + heartbeat task + beat schedule — beat dispatches every 60 s, worker executes it, structured logs verified
 - [x] Next.js app: layout, sidebar for all routes, dark/light theme, TanStack Query, API proxy rewrite — production build OK, proxy verified
 - [x] `/dashboard`: system health, data sources, carrier integration status, honest empty states
 - [x] Placeholder pages for `/fleet`, `/carriers`, `/shipments`, `/vessels/[id]`, `/predictions`, `/research`, `/settings` — all routes return 200
 - [x] Backend tests: unit (settings, errors, health, worker, import boundaries) — 32 passed; ruff + mypy --strict clean
 - [x] Backend tests: integration (migration round-trip, model/DB drift, seeds, API with DB) — 14 passed locally and in CI
 - [x] Frontend tests (status badge, sidebar active state, data-sources loading/error/data states, API client) — 28 passed
-- [~] GitHub Actions CI (backend + migrations on TimescaleDB-HA service, frontend lint/typecheck/test/build) — backend job green; frontend typecheck fix pushed, awaiting rerun
+- [x] GitHub Actions CI (backend + migrations on TimescaleDB-HA service, frontend lint/typecheck/test/build) — both jobs green
 - [x] Lockfiles: `uv.lock`, `apps/web/package-lock.json`
 - [x] **Verification:** `docker compose up`, migrations applied to Postgres, integration tests, frontend lint/typecheck/test/build
 
