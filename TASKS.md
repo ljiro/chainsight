@@ -12,25 +12,25 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] `TASKS.md`
 
 ## Phase 1 — Foundation
-- [~] Monorepo layout (`apps/`, `core/`, `database/`, `integrations/`, `services/`, `ml/`, `infrastructure/`, `docs/`, `tests/`)
+- [x] Monorepo layout (`apps/`, `core/`, `database/`, `integrations/`, `services/`, `ml/`, `infrastructure/`, `docs/`, `tests/`)
 - [x] Root tooling: `pyproject.toml` (uv), `Makefile`, `.gitignore`, `.env.example`, `LICENSE` — `uv sync` OK on Python 3.12
-- [~] Docker Compose: db (TimescaleDB-HA + PostGIS), redis, migrate, api, worker, beat, web
-- [~] Dockerfiles for API/worker and web
+- [x] Docker Compose: db (TimescaleDB-HA + PostGIS), redis, migrate, api, worker, beat, web — `docker compose up --build` verified, all services healthy
+- [x] Dockerfiles for API/worker and web
 - [x] Core: typed settings (secrets as `SecretStr`), structured logging, UTC time helpers — unit tested
-- [~] Database: SQLAlchemy models + naming convention, async/sync sessions
-- [~] Alembic `0001_foundation` — offline SQL render verified; not yet applied to a live DB — (orgs, users, members, api_keys, carriers, carrier_integrations, carrier_integration_logs, data_sources, ingestion_logs, ports, system_alerts, audit_logs; PostGIS; optional TimescaleDB)
-- [~] Alembic `0002_reference_data` (carriers, platform carrier integrations, data sources)
-- [~] FastAPI: request IDs, error envelope, `/api/v1/health`, `/api/v1/health/ready`, `/api/v1/data-sources`, `/api/v1/carriers`, OpenAPI — DB-free paths unit tested; DB endpoints await integration run
-- [~] Celery app + heartbeat task + beat schedule — eager-mode tested; not yet run against Redis
-- [~] Next.js app: layout, sidebar for all routes, dark/light theme, TanStack Query, API proxy rewrite
-- [~] `/dashboard`: system health, data sources, carrier integration status, honest empty states
-- [~] Placeholder pages for `/fleet`, `/carriers`, `/shipments`, `/vessels/[id]`, `/predictions`, `/research`, `/settings`
+- [x] Database: SQLAlchemy models + naming convention, async/sync sessions — no model/migration drift (integration test)
+- [x] Alembic `0001_foundation` (orgs, users, members, api_keys, carriers, carrier_integrations, carrier_integration_logs, data_sources, ingestion_logs, ports, system_alerts, audit_logs; PostGIS; optional TimescaleDB) — applied on PostGIS 3.7 / TimescaleDB 2.32; up/down/up round-trip tested
+- [x] Alembic `0002_reference_data` (carriers, platform carrier integrations, data sources)
+- [x] FastAPI: request IDs, error envelope, `/api/v1/health`, `/api/v1/health/ready`, `/api/v1/data-sources`, `/api/v1/carriers`, OpenAPI — unit + integration tested, verified live
+- [~] Celery app + heartbeat task + beat schedule — eager-mode tested; worker connects to Redis and registers the task; scheduled execution not yet confirmed in the logs
+- [x] Next.js app: layout, sidebar for all routes, dark/light theme, TanStack Query, API proxy rewrite — production build OK, proxy verified
+- [x] `/dashboard`: system health, data sources, carrier integration status, honest empty states
+- [x] Placeholder pages for `/fleet`, `/carriers`, `/shipments`, `/vessels/[id]`, `/predictions`, `/research`, `/settings` — all routes return 200
 - [x] Backend tests: unit (settings, errors, health, worker, import boundaries) — 32 passed; ruff + mypy --strict clean
-- [~] Backend tests: integration (migration round-trip, model/DB drift, seeds, API with DB)
-- [~] Frontend tests (status badge, sidebar active state, data-sources loading/error/data states)
-- [~] GitHub Actions CI (backend + migrations on TimescaleDB-HA service, frontend lint/typecheck/test/build)
-- [~] Lockfiles: `uv.lock` generated; `apps/web/package-lock.json` pending (Node not installed); neither committed yet
-- [ ] **Verification:** `docker compose up`, migrations applied to Postgres, integration tests, frontend install/lint/typecheck/test/build — *blocked: Docker and Node.js not installed yet*
+- [x] Backend tests: integration (migration round-trip, model/DB drift, seeds, API with DB) — 14 passed locally and in CI
+- [x] Frontend tests (status badge, sidebar active state, data-sources loading/error/data states, API client) — 28 passed
+- [~] GitHub Actions CI (backend + migrations on TimescaleDB-HA service, frontend lint/typecheck/test/build) — backend job green; frontend typecheck fix pushed, awaiting rerun
+- [x] Lockfiles: `uv.lock`, `apps/web/package-lock.json`
+- [x] **Verification:** `docker compose up`, migrations applied to Postgres, integration tests, frontend lint/typecheck/test/build
 
 ## Phase 2 — Fleet tracking
 - [ ] Migration: vessels, vessel_identifiers, vessel_carrier_history, vessel_positions (hypertable), vessel_position_sources, voyages, voyage_port_calls, port_areas, maritime_routes, port_observations
