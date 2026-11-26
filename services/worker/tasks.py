@@ -112,3 +112,36 @@ async def _refresh_shipments() -> dict[str, int]:
 def refresh_shipments() -> dict[str, int]:
     """Re-track active, carrier-backed shipments whose data is older than the refresh interval."""
     return asyncio.run(_refresh_shipments())
+
+
+@shared_task(name="ml.detect_anomalies")  # type: ignore[untyped-decorator]
+def detect_anomalies() -> dict[str, int]:
+    """Rule-based anomaly detection for watched vessels (every 5 minutes)."""
+    from ml.anomaly_detection.runner import run_anomaly_detection
+
+    with get_sync_engine().begin() as conn:
+        return run_anomaly_detection(conn, utcnow()).__dict__
+
+
+@shared_task(name="ml.predict")  # type: ignore[untyped-decorator]
+def ml_predict() -> dict[str, int]:
+    """Append new ETA and delay predictions from the production models."""
+    from services.ml_jobs import run_predictions
+
+    return run_predictions(get_sync_engine(), utcnow())
+
+
+@shared_task(name="ml.congestion")  # type: ignore[untyped-decorator]
+def ml_congestion() -> dict[str, int]:
+    """Hourly port congestion observations + 24 h forecasts."""
+    from services.ml_jobs import run_congestion
+
+    return run_congestion(get_sync_engine(), utcnow())
+
+
+@shared_task(name="ml.evaluate")  # type: ignore[untyped-decorator]
+def ml_evaluate() -> dict[str, int]:
+    """Back-fill observed outcomes and record live model metrics."""
+    from services.ml_jobs import run_evaluation
+
+    return run_evaluation(get_sync_engine(), utcnow())

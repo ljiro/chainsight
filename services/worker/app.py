@@ -48,6 +48,10 @@ def create_celery() -> Celery:
             "port-weather": {"task": "ingest.weather.ports", "schedule": crontab(minute=5)},
             "carrier-integrations": {"task": "carriers.sync_integrations", "schedule": 600.0},
             "shipment-refresh": {"task": "carriers.refresh_shipments", "schedule": 1800.0},
+            "ml-anomalies": {"task": "ml.detect_anomalies", "schedule": 300.0},
+            "ml-predict": {"task": "ml.predict", "schedule": 1800.0},
+            "ml-congestion": {"task": "ml.congestion", "schedule": crontab(minute=2)},
+            "ml-evaluate": {"task": "ml.evaluate", "schedule": crontab(minute=15)},
         },
     )
     app.autodiscover_tasks(["services.worker"], related_name="tasks", force=True)
