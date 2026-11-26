@@ -28,7 +28,11 @@ def create_celery() -> Celery:
     app = Celery("chainsight", broker=s.celery_broker_url, backend=s.celery_result_backend)
     app.conf.update(
         task_default_queue="default",
-        task_routes={"ingest.*": {"queue": "ingest"}, "ml.*": {"queue": "ml"}},
+        task_routes={
+            "ingest.*": {"queue": "ingest"},
+            "carriers.*": {"queue": "ingest"},
+            "ml.*": {"queue": "ml"},
+        },
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
@@ -42,6 +46,8 @@ def create_celery() -> Celery:
             "system-heartbeat": {"task": "system.heartbeat", "schedule": 60.0},
             "data-freshness": {"task": "ingest.check_freshness", "schedule": 60.0},
             "port-weather": {"task": "ingest.weather.ports", "schedule": crontab(minute=5)},
+            "carrier-integrations": {"task": "carriers.sync_integrations", "schedule": 600.0},
+            "shipment-refresh": {"task": "carriers.refresh_shipments", "schedule": 1800.0},
         },
     )
     app.autodiscover_tasks(["services.worker"], related_name="tasks", force=True)

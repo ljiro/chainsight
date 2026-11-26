@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     weather_port_unlocodes: Annotated[list[str], NoDecode] = Field(default_factory=list)
     weather_max_ports: int = Field(default=50, ge=1, le=500)
 
+    # Shipment tracking (Phase 3). JSON object: {"<carrier code>": {"base_url": ..., "auth":
+    # {"type": "api_key"|"bearer"|"oauth2_client_credentials", ...}}}. See
+    # docs/integrations/carriers.md. Held as a secret because it contains credentials.
+    carrier_dcsa_config: SecretStr | None = None
+    shipment_delay_threshold_hours: float = Field(default=12.0, ge=0)
+    shipment_auto_refresh_minutes: int = Field(default=60, ge=5)
+
     maersk_consumer_key: SecretStr | None = None
     maersk_consumer_secret: SecretStr | None = None
     hapag_lloyd_client_id: SecretStr | None = None
@@ -112,6 +119,7 @@ class Settings(BaseSettings):
     @field_validator(
         "aisstream_api_key",
         "open_meteo_api_key",
+        "carrier_dcsa_config",
         "maersk_consumer_key",
         "maersk_consumer_secret",
         "hapag_lloyd_client_id",

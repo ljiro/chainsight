@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import socket
 from typing import Any
 
@@ -41,3 +42,73 @@ def port_weather() -> dict[str, Any]:
         get_sync_engine(), s, OpenMeteoClient(s.open_meteo_base_url, api_key=key)
     )
     return result.__dict__
+
+
+async def _sync_carriers() -> dict[str, str]:
+    from database.session import get_async_engine, get_sessionmaker
+    from services.shipment_tracking.registry import build_registry, sync_integration_statuses
+
+    try:
+        async with get_sessionmaker()() as session, session.begin():
+            return await sync_integration_statuses(session, build_registry(get_settings()))
+    finally:
+        await get_async_engine().dispose()
+
+
+@shared_task(name="carriers.sync_integrations")  # type: ignore[untyped-decorator]
+def sync_carrier_integrations() -> dict[str, str]:
+    """Recompute every carrier's tracking integration status (honest, credential-aware)."""
+    return asyncio.run(_sync_carriers())
+
+
+async def _refresh_shipments() -> dict[str, int]:
+    import sqlalchemy as sa
+
+    from database.session import get_async_engine, get_sessionmaker
+    from integrations.carriers.models import CarrierError, TrackingReference
+    from services.shipment_tracking.registry import build_registry
+    from services.shipment_tracking.service import track
+
+    s = get_settings()
+    registry = build_registry(s)
+    refreshed = failed = 0
+    try:
+        async with get_sessionmaker()() as session:
+            due = (
+                await session.execute(
+                    sa.text(
+                        "SELECT c.code, s.reference_type, s.reference_value FROM shipments s "
+                        "JOIN carriers c ON c.id = s.carrier_id JOIN data_sources ds ON ds.id = s.source_id "
+                        "WHERE ds.key <> 'csv-import' AND s.status NOT IN ('delivered', 'unknown') "
+                        "AND (s.last_refreshed_at IS NULL "
+                        "OR s.last_refreshed_at < now() - make_interval(mins => :m)) "
+                        "ORDER BY s.last_refreshed_at NULLS FIRST LIMIT 200"
+                    ),
+                    {"m": s.shipment_auto_refresh_minutes},
+                )
+            ).all()
+            for row in due:
+                ref = TrackingReference(
+                    reference_type=row.reference_type, value=row.reference_value
+                )
+                try:
+                    await track(session, registry, carrier_code=row.code, reference=ref,
+                                threshold_hours=s.shipment_delay_threshold_hours)  # fmt: skip
+                    await session.commit()
+                    refreshed += 1
+                except CarrierError:
+                    await session.rollback()
+                    failed += 1
+                except Exception:
+                    await session.rollback()
+                    failed += 1
+                    log.exception("shipment_refresh_failed", carrier=row.code)
+    finally:
+        await get_async_engine().dispose()
+    return {"due": len(due), "refreshed": refreshed, "failed": failed}
+
+
+@shared_task(name="carriers.refresh_shipments")  # type: ignore[untyped-decorator]
+def refresh_shipments() -> dict[str, int]:
+    """Re-track active, carrier-backed shipments whose data is older than the refresh interval."""
+    return asyncio.run(_refresh_shipments())
