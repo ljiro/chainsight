@@ -63,6 +63,10 @@ extend-exclude = ["apps/web"]
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "DTZ", "RUF"]
 ignore = ["S101"]  # asserts are fine in tests
 
+[tool.ruff.lint.pycodestyle]
+# Formatter wraps code at 100; allow embedded SQL strings slightly longer.
+max-line-length = 110
+
 [tool.ruff.lint.isort]
 known-first-party = ["core", "database", "integrations", "services", "ml", "chainsight_api"]
 
