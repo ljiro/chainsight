@@ -50,16 +50,19 @@ def test_list_carriers_with_integration_status(client: TestClient) -> None:
     assert body["total"] == 9
     names = [c["name"] for c in body["items"]]
     assert names == sorted(names)
-    for c in [c for c in body["items"] if c["code"] != "demo"]:
-        assert c["integrations"] == [
-            {
-                "capability": "shipment_tracking",
-                "status": "unavailable",
-                "status_reason": "No adapter implemented yet (planned for Phase 3).",
-                "last_checked_at": None,
-                "last_success_at": None,
-            }
-        ]
+    # Startup syncs statuses honestly: without credentials nothing is "connected".
+    statuses = {c["code"]: c["integrations"][0] for c in body["items"]}
+    assert {i["status"] for i in statuses.values()} <= {
+        "authentication_required",
+        "unavailable",
+        "demo_data_only",
+    }
+    for code in ("maersk", "msc", "cma-cgm", "hapag-lloyd", "cosco", "evergreen", "one"):
+        assert statuses[code]["status"] == "authentication_required", code
+        assert "CARRIER_DCSA_CONFIG" in statuses[code]["status_reason"]
+        assert statuses[code]["last_success_at"] is None
+    assert statuses["dhl"]["status"] == "unavailable"
+    assert statuses["demo"]["status"] == "demo_data_only"
 
 
 def test_carriers_filter_sort_and_paginate(client: TestClient) -> None:

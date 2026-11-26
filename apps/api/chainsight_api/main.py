@@ -11,11 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from chainsight_api.errors import install_error_handlers
 from chainsight_api.health import close_redis
 from chainsight_api.middleware import install_middleware
-from chainsight_api.routers import catalog, fleet, health, live
+from chainsight_api.routers import catalog, fleet, health, live, shipments
 from chainsight_api.schemas.common import ErrorResponse
 from core.logging_config import configure_logging, get_logger
 from core.settings import Settings, get_settings
-from database.session import get_async_engine
+from database.session import get_async_engine, get_sessionmaker
+from services.shipment_tracking.registry import build_registry, sync_integration_statuses
 
 API_V1_PREFIX = "/api/v1"
 
@@ -25,6 +26,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = get_logger(__name__)
     settings: Settings = app.state.settings
     log.info("startup", env=settings.app_env.value, version=settings.app_version)
+    app.state.carrier_registry = build_registry(settings)
+    try:  # best effort: the API must start even if the database is not reachable yet
+        async with get_sessionmaker()() as session, session.begin():
+            statuses = await sync_integration_statuses(session, app.state.carrier_registry)
+        log.info("carrier_integrations_synced", statuses=statuses)
+    except Exception as exc:
+        log.warning("carrier_integrations_sync_skipped", error_type=type(exc).__name__)
     yield
     await close_redis()
     if get_async_engine.cache_info().currsize:
@@ -69,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     v1.include_router(catalog.router)
     v1.include_router(fleet.router)
     v1.include_router(live.router)
+    v1.include_router(shipments.router)
     app.include_router(v1)
     return app
 

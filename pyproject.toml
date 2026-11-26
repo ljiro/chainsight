@@ -75,6 +75,7 @@ known-first-party = ["core", "database", "integrations", "services", "ml", "chai
 "database/migrations/**" = ["E501"]
 # Read models compose SQL from constant fragments; all values are bound parameters.
 "services/fleet_tracking/queries.py" = ["S608"]
+"services/shipment_tracking/queries.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
