@@ -165,12 +165,16 @@ def build_events(j: DemoJourney, now: datetime) -> list[dict[str, Any]]:
 
     arrival_actual = arrive + delay
     if arrival_actual > now and depart <= now:
-        # The carrier's current estimate, re-issued hourly; identical estimates dedupe.
+        # Delays emerge during the voyage: the estimate reveals half the eventual delay at
+        # departure and all of it by arrival. Each changed estimate is a new event (append-
+        # only history); an unchanged estimate re-issued later dedupes by its id.
+        progress = min(1.0, (now - depart) / (arrival_actual - depart))
+        estimate = arrive + timedelta(hours=round(j.delay_h * (0.5 + 0.5 * progress)))
         issued = now.replace(minute=0, second=0, microsecond=0)
         events.append(
-            _event("TRANSPORT", "ARRI", "EST", arrival_actual, issued, j.destination, j,
+            _event("TRANSPORT", "ARRI", "EST", estimate, issued, j.destination, j,
                    final_vessel, final_voy,
-                   event_id=f"{j.reference}-EST-ARRI-{j.destination}-{arrival_actual:%Y%m%d%H}")
+                   event_id=f"{j.reference}-EST-ARRI-{j.destination}-{estimate:%Y%m%d%H}")
         )  # fmt: skip
     return events
 
