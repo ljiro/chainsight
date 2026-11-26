@@ -16,6 +16,13 @@ x-backend: &backend
     # Local default: the synthetic simulator (labeled as such everywhere). Set
     # AIS_PROVIDER=aisstream and AISSTREAM_API_KEY in .env for live AIS.
     AIS_PROVIDER: ${AIS_PROVIDER:-simulator}
+    # Model artifacts and the MLflow tracking DB live on a shared volume, so a model trained
+    # by the worker (or `docker compose run worker python -m services.ml_jobs ...`) is
+    # loadable by every backend container. Artifact URIs are stored relative to this dir.
+    MODEL_ARTIFACT_DIR: /app/data/models
+    MLFLOW_TRACKING_URI: sqlite:////app/data/mlflow.db
+  volumes:
+    - mldata:/app/data
   restart: unless-stopped
 
 services:
@@ -120,3 +127,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  mldata:

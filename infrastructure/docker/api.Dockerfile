@@ -29,6 +29,9 @@ COPY alembic.ini ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ -f uv.lock ]; then uv sync --locked --no-dev; else uv sync --no-dev; fi
 
+# Mount point for the shared ML volume; a fresh named volume inherits this ownership.
+RUN mkdir -p /app/data/models && chown -R app:app /app/data
+
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
