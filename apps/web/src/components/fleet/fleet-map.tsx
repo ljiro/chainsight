@@ -5,6 +5,7 @@ import type { GeoJSONSource, Map as MlMap, MapLayerMouseEvent, Popup } from "map
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, classGroup } from "@/lib/fleet";
+import { cn } from "@/lib/utils";
 import type { Port, TrackResponse, VesselFeature } from "@/lib/types";
 
 const STYLE = {
@@ -90,12 +91,12 @@ function addLayers(map: MlMap, mode: Mode) {
     type: "circle",
     source: "ports",
     minzoom: PORT_MIN_ZOOM,
+    // Ports are hollow rings so they never read as (filled) vessel markers.
     paint: {
-      "circle-radius": ["case", [">", ["get", "in_port"], 0], 5, 3],
-      "circle-color": mode === "dark" ? "#c3c2b7" : "#52514e",
-      "circle-stroke-color": SURFACE[mode],
-      "circle-stroke-width": 1.5,
-      "circle-opacity": 0.85,
+      "circle-radius": ["case", [">", ["get", "in_port"], 0], 5.5, 4],
+      "circle-color": "rgba(0,0,0,0)",
+      "circle-stroke-color": mode === "dark" ? "#c3c2b7" : "#52514e",
+      "circle-stroke-width": ["case", [">", ["get", "in_port"], 0], 2, 1.25],
     },
   });
   map.addLayer({
@@ -252,7 +253,9 @@ export function FleetMap({
   useEffect(() => {
     if (modeRef.current === mode) return;
     modeRef.current = mode;
-    mapRef.current?.setStyle(STYLE[mode]);
+    // diff: false forces a full reload so `style.load` fires and our layers are re-added;
+    // a diffed swap can drop custom layers without emitting it.
+    mapRef.current?.setStyle(STYLE[mode], { diff: false });
   }, [mode]);
 
   useEffect(() => {
@@ -289,7 +292,9 @@ export function FleetMap({
   }, [fitTo?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={className} style={{ position: "relative" }}>
+    // `relative` is only a default: tailwind-merge lets a caller's `absolute inset-0` win.
+    // (An inline position style here once overrode it and collapsed the map to 0 px.)
+    <div className={cn("relative", className)}>
       <div ref={container} className="absolute inset-0" data-testid="fleet-map" />
       {failed ? (
         <div role="status" className="absolute bottom-2 left-2 rounded bg-card/90 px-2 py-1 text-xs text-muted-foreground">

@@ -143,6 +143,10 @@ export function FleetView() {
                 {g.label}
               </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="size-2.5 rounded-full border-[1.5px] border-muted-foreground" />
+              Port (bold ring = vessels in port)
+            </span>
             <span className="mt-1 text-muted-foreground">Faded = not seen in the last hour</span>
             {viewport && viewport.zoom < PORT_ZOOM ? (
               <span className="text-muted-foreground">Zoom in to show ports</span>
