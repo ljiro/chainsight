@@ -2,7 +2,11 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Cache npm downloads across builds and retry slow fetches instead of failing.
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    if [ -f package-lock.json ]; then npm ci --prefer-offline; else npm install; fi
 
 FROM node:22-alpine AS build
 WORKDIR /app
