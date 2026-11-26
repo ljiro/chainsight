@@ -27,6 +27,8 @@
   --info: oklch(0.6 0.13 237);
   --synthetic: oklch(0.6 0.18 300);
   --chart-1: #2a78d6; /* validated categorical slot 1 (light) */
+  --chart-2: #eb6834; /* validated categorical slot 2 (light) */
+  --chart-muted: #898781; /* benchmark / reference series */
 
   --sidebar: oklch(0.21 0.035 255);
   --sidebar-foreground: oklch(0.85 0.015 250);
@@ -57,6 +59,8 @@
   --info: oklch(0.7 0.12 232);
   --synthetic: oklch(0.72 0.15 300);
   --chart-1: #3987e5; /* validated categorical slot 1 (dark) */
+  --chart-2: #d95926; /* validated categorical slot 2 (dark) */
+  --chart-muted: #898781;
 
   --sidebar: oklch(0.13 0.02 260);
   --sidebar-foreground: oklch(0.85 0.015 250);
@@ -92,6 +96,8 @@
   --color-info: var(--info);
   --color-synthetic: var(--synthetic);
   --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-muted: var(--chart-muted);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);

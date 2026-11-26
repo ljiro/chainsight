@@ -469,3 +469,137 @@ export type PredictionsSummary = {
   congestion_ports: number;
   eta_resolved: number;
 };
+
+// ---- Quantitative research (Phase 5) ---------------------------------------------------
+
+export type ResearchIndicator = {
+  key: string;
+  name: string;
+  category: "maritime" | "market";
+  kind: "series" | "composite";
+  entity_kind?: string;
+  entity_name?: string;
+  metric?: string;
+  unit?: string | null;
+  publication_lag_days?: number;
+  attributes?: { availability_rule?: Record<string, unknown>; original_source?: string; estimated?: boolean } & Record<string, unknown>;
+  source_key?: string;
+  source_name?: string;
+  data_mode?: string;
+  first_as_of?: string | null;
+  last_as_of?: string | null;
+  n_obs?: number;
+  n_revisions?: number;
+  description?: string;
+  inputs?: string[];
+  available?: boolean;
+};
+
+export type IndicatorCatalog = {
+  indicators: ResearchIndicator[];
+  ais_metrics: Record<string, string>;
+  transforms: string[];
+  frequencies: Record<string, string>;
+};
+
+export type SeriesPoint = { as_of: string; value: number | null; available_at: string };
+
+export type FeatureSeries = {
+  key: string;
+  name: string;
+  frequency: string;
+  transform: string;
+  n: number;
+  median_availability_lag_days: number;
+  points: SeriesPoint[];
+};
+
+export type MarketSeries = { key: string; name: string; unit: string | null; n: number; points: SeriesPoint[] };
+
+export type Section<T> = { ok: true; result: T } | { ok: false; reason: string };
+
+export type Stationarity = {
+  n: number;
+  adf_stat: number | null;
+  adf_p: number | null;
+  kpss_stat: number | null;
+  kpss_p: number | null;
+  verdict: "stationary" | "non_stationary" | "inconclusive";
+};
+
+export type Analysis = {
+  feature: string;
+  asset: string;
+  alignment: { note: string; n: number; first: string; last: string; median_staleness_days: number; execution_lag_days: number };
+  correlation: Section<{ n: number; pearson: number | null; pearson_p: number | null; spearman: number | null; spearman_p: number | null }>;
+  lagged_correlation: Section<{ lag: number; corr: number | null; p: number | null; n: number; ci95: number | null }[]>;
+  rolling_correlation: Section<{ t: string; value: number | null }[]>;
+  stationarity: { feature: Section<Stationarity>; returns: Section<Stationarity> };
+  regression: Section<{ n: number; alpha: number | null; beta: number | null; beta_t: number | null; beta_p: number | null; r2: number | null; hac_lags: number }>;
+  granger: Section<{ lag: number; f: number | null; p: number | null }[]>;
+  out_of_sample: Section<{ n_test: number; r2_oos: number | null; hit_rate: number | null; hit_rate_mean_forecast: number | null; min_train: number }>;
+  scatter: { x: number; y: number; t: string }[];
+  disclaimer: string;
+};
+
+export type MetricCell = { value: number | null; benchmark: number | null };
+
+export type BacktestPoint = {
+  t: string;
+  position: number;
+  signal: number | null;
+  net_return: number;
+  equity: number;
+  benchmark_equity: number;
+  drawdown: number;
+};
+
+export type BacktestFold = {
+  train_start: string;
+  train_end: string;
+  test_start: string;
+  test_end: string;
+  lookback: number;
+  threshold: number;
+  direction: number;
+  train_sharpe: number | null;
+};
+
+export type ExperimentConfig = {
+  feature: string;
+  asset: string;
+  execution_lag_days?: number;
+  backtest?: Record<string, unknown>;
+  resolved_backtest?: Record<string, unknown>;
+};
+
+export type BacktestRunSummary = {
+  id: string;
+  status: "running" | "succeeded" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+  code_version: string | null;
+  data_snapshot_hash: string | null;
+  metrics: Record<string, MetricCell> | null;
+};
+
+export type BacktestRun = BacktestRunSummary & {
+  config: ExperimentConfig;
+  series: { points?: BacktestPoint[]; in_sample_params?: Record<string, number>; n_configs_tested?: number };
+  folds: BacktestFold[];
+};
+
+export type Experiment = {
+  id: string;
+  name: string;
+  hypothesis: string;
+  config: ExperimentConfig;
+  status: "draft" | "completed" | "failed";
+  created_at: string;
+  updated_at: string;
+  n_runs?: number;
+  latest_run?: BacktestRunSummary | null;
+};
+
+export type ExperimentDetail = Experiment & { runs: BacktestRun[]; disclaimer: string };

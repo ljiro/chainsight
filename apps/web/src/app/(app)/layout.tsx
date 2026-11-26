@@ -11,7 +11,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <header className="flex h-14 items-center justify-between gap-3 border-b bg-card/60 px-4 backdrop-blur md:px-6">
           <MobileNav />
           <div className="hidden items-center gap-2 md:flex">
-            <Badge tone="info">Phase 4 · Predictive intelligence</Badge>
+            <Badge tone="info">Phase 5 · Quant research</Badge>
           </div>
           <ThemeToggle />
         </header>

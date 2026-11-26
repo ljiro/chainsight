@@ -25,6 +25,12 @@ import type {
   PortCongestion,
   PredictionsSummary,
   VesselAnomaly,
+  Analysis,
+  ExperimentDetail,
+  Experiment,
+  FeatureSeries,
+  IndicatorCatalog,
+  MarketSeries,
 } from "./types";
 
 export const queryKeys = {
@@ -52,6 +58,12 @@ export const queryKeys = {
   congestion: ["predictions", "congestion"] as const,
   portCongestion: (id: string) => ["predictions", "congestion", id] as const,
   anomalies: (vesselId: string | null, status: string) => ["predictions", "anomalies", vesselId, status] as const,
+  indicators: ["research", "indicators"] as const,
+  feature: (key: string) => ["research", "feature", key] as const,
+  market: (key: string) => ["research", "market", key] as const,
+  analysis: (feature: string, asset: string, lag: number) => ["research", "analysis", feature, asset, lag] as const,
+  experiments: ["research", "experiments"] as const,
+  experiment: (id: string) => ["research", "experiment", id] as const,
 };
 
 export function useReadiness() {
@@ -299,5 +311,89 @@ export function useAnomalies(vesselId: string | null, status: "open" | "resolved
       return apiGet<VesselAnomaly[]>(`/anomalies?${qs}`, { signal });
     },
     refetchInterval: 60_000,
+  });
+}
+
+// ---- Quantitative research -----------------------------------------------------------------
+
+export function useResearchIndicators() {
+  return useQuery({
+    queryKey: queryKeys.indicators,
+    queryFn: ({ signal }) => apiGet<IndicatorCatalog>("/research/indicators", { signal }),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useFeatureSeries(key: string | null) {
+  return useQuery({
+    queryKey: queryKeys.feature(key ?? ""),
+    queryFn: ({ signal }) => apiGet<FeatureSeries>(`/research/features?key=${encodeURIComponent(key!)}`, { signal }),
+    enabled: !!key,
+    placeholderData: keepPreviousData,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+export function useMarketSeries(key: string | null) {
+  return useQuery({
+    queryKey: queryKeys.market(key ?? ""),
+    queryFn: ({ signal }) => apiGet<MarketSeries>(`/research/market?key=${encodeURIComponent(key!)}`, { signal }),
+    enabled: !!key,
+    placeholderData: keepPreviousData,
+    staleTime: 10 * 60_000,
+  });
+}
+
+/** Analyses are deterministic for given inputs, so they are cached like reads. */
+export function useAnalysis(feature: string | null, asset: string | null, executionLagDays = 0) {
+  return useQuery({
+    queryKey: queryKeys.analysis(feature ?? "", asset ?? "", executionLagDays),
+    queryFn: () =>
+      apiPost<Analysis>("/research/analysis", { feature, asset, execution_lag_days: executionLagDays }),
+    enabled: !!feature && !!asset,
+    placeholderData: keepPreviousData,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+export function useExperiments() {
+  return useQuery({
+    queryKey: queryKeys.experiments,
+    queryFn: ({ signal }) => apiGet<Experiment[]>("/research/experiments", { signal }),
+  });
+}
+
+export function useExperiment(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.experiment(id ?? ""),
+    queryFn: ({ signal }) => apiGet<ExperimentDetail>(`/research/experiments/${id}`, { signal }),
+    enabled: !!id,
+  });
+}
+
+function useInvalidateResearch() {
+  const qc = useQueryClient();
+  return (detail?: ExperimentDetail) => {
+    void qc.invalidateQueries({ queryKey: queryKeys.experiments });
+    if (detail) qc.setQueryData(queryKeys.experiment(detail.id), detail);
+  };
+}
+
+export function useCreateExperiment() {
+  const invalidate = useInvalidateResearch();
+  return useMutation({
+    mutationFn: (body: { name: string; hypothesis: string; config: Record<string, unknown> }) =>
+      apiPost<ExperimentDetail>("/research/experiments", body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRerunExperiment(id: string) {
+  const invalidate = useInvalidateResearch();
+  return useMutation({
+    mutationFn: () => apiPost<ExperimentDetail>(`/research/experiments/${id}/runs`, {}),
+    onSuccess: invalidate,
   });
 }
