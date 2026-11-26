@@ -252,3 +252,108 @@ export interface LivePositionMessage {
     observed_at: string;
   }[];
 }
+
+// ---- Shipments (Phase 3) -----------------------------------------------------------------
+
+export type ShipmentStatus =
+  | "unknown" | "planned" | "at_origin" | "loaded" | "in_transit" | "transshipment" | "discharged" | "delivered";
+export type DelayStatus = "unknown" | "on_time" | "delayed" | "arrived_on_time" | "arrived_late";
+export type Classifier = "PLANNED" | "ESTIMATED" | "ACTUAL";
+
+export interface ShipmentLocation {
+  unlocode: string | null;
+  port_name: string | null;
+  mapped: boolean;
+}
+
+export interface ShipmentSummary {
+  id: string;
+  carrier: { code: string; name: string };
+  reference_type: "container" | "booking" | "bill_of_lading";
+  reference_value: string;
+  origin: ShipmentLocation;
+  destination: ShipmentLocation;
+  status: ShipmentStatus;
+  planned_arrival_at: string | null;
+  current_eta_at: string | null;
+  actual_arrival_at: string | null;
+  delay_hours: number | null;
+  delay_status: DelayStatus;
+  last_event_at: string | null;
+  last_refreshed_at: string | null;
+  containers: string[];
+  provenance: { source: string; data_mode: DataMode };
+}
+
+export interface ShipmentEvent {
+  id: string;
+  event_type: "equipment" | "transport" | "shipment";
+  event_code: string;
+  classifier: Classifier;
+  event_at: string;
+  event_created_at: string | null;
+  location_unlocode: string | null;
+  location_name: string | null;
+  container_number: string | null;
+  vessel_name: string | null;
+  vessel_imo: number | null;
+  voyage_number: string | null;
+  description: string | null;
+  raw_code: string | null;
+  ingested_at: string;
+}
+
+export interface VesselLeg {
+  sequence: number;
+  carrier_vessel_name: string | null;
+  carrier_vessel_imo: number | null;
+  carrier_voyage_number: string | null;
+  load_unlocode: string | null;
+  discharge_unlocode: string | null;
+  vessel_id: string | null;
+  vessel_position: LatestPosition | null;
+}
+
+export interface ShipmentDetail extends ShipmentSummary {
+  events: ShipmentEvent[];
+  legs: VesselLeg[];
+  integration_status: IntegrationStatus | null;
+  refreshable: boolean;
+}
+
+export interface ShipmentsSummary {
+  total: number;
+  active: number;
+  delayed: number;
+  arrived_late: number;
+  by_status: Record<string, number>;
+  by_delay_status: Record<string, number>;
+  by_data_mode: Record<string, number>;
+}
+
+export interface ImportReport {
+  ok: boolean;
+  rows: number;
+  shipments_created: number;
+  shipments_updated: number;
+  events_inserted: number;
+  events_duplicate: number;
+  errors: { row: number; field: string; message: string }[];
+}
+
+export interface CarrierPerformance {
+  code: string;
+  name: string;
+  carrier_type: string;
+  integration_status: IntegrationStatus | null;
+  integration_reason: string | null;
+  last_call_at: string | null;
+  last_call_outcome: string | null;
+  vessels_associated: number;
+  shipments_tracked: number;
+  shipments_active: number;
+  shipments_delayed: number;
+  arrivals: number;
+  on_time_rate: number | null;
+  avg_arrival_delay_hours: number | null;
+}

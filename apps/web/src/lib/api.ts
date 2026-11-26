@@ -8,6 +8,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     readonly requestId: string | null = null,
+    readonly details: unknown = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -44,7 +45,33 @@ export async function apiGet<T>(
   if (res.ok || acceptStatuses.includes(res.status)) return body as T;
 
   if (isErrorBody(body)) {
-    throw new ApiError(body.error.message, res.status, body.error.code, body.error.request_id);
+    const e = body.error;
+    throw new ApiError(e.message, res.status, e.code, e.request_id, e.details);
+  }
+  throw new ApiError(`Request failed (${res.status})`, res.status, "http_error");
+}
+
+/** POST JSON (or a raw body with an explicit content type) and parse the response. */
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  { contentType = "application/json", acceptStatuses = [] }: { contentType?: string; acceptStatuses?: number[] } = {},
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": contentType },
+      body: contentType === "application/json" ? JSON.stringify(body) : (body as BodyInit),
+    });
+  } catch {
+    throw new ApiError("Cannot reach the ChainSight API", 0, "network_error");
+  }
+  const parsed: unknown = await res.json().catch(() => null);
+  if (res.ok || acceptStatuses.includes(res.status)) return parsed as T;
+  if (isErrorBody(parsed)) {
+    const e = parsed.error;
+    throw new ApiError(e.message, res.status, e.code, e.request_id, e.details);
   }
   throw new ApiError(`Request failed (${res.status})`, res.status, "http_error");
 }

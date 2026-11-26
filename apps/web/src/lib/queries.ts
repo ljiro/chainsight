@@ -1,9 +1,14 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { apiGet } from "./api";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost } from "./api";
 import type {
   Alert,
   ApproachingVessel,
   Carrier,
+  CarrierPerformance,
+  ImportReport,
+  ShipmentDetail,
+  ShipmentsSummary,
+  ShipmentSummary,
   DataSource,
   FleetPositions,
   FleetSummary,
@@ -27,6 +32,10 @@ export const queryKeys = {
   portCalls: (id: string) => ["vessels", id, "port-calls"] as const,
   ports: (bbox: string | null) => ["ports", bbox] as const,
   alerts: ["alerts", "open"] as const,
+  shipments: (params: string) => ["shipments", "list", params] as const,
+  shipment: (id: string) => ["shipments", "detail", id] as const,
+  shipmentsSummary: ["shipments", "summary"] as const,
+  carrierPerformance: ["carriers", "performance"] as const,
 };
 
 export function useReadiness() {
@@ -123,5 +132,76 @@ export function useAlerts() {
     queryKey: queryKeys.alerts,
     queryFn: ({ signal }) => apiGet<Page<Alert>>("/alerts?status=open&limit=10", { signal }),
     refetchInterval: 30_000,
+  });
+}
+
+export function useShipments(params: URLSearchParams) {
+  const qs = params.toString();
+  return useQuery({
+    queryKey: queryKeys.shipments(qs),
+    queryFn: ({ signal }) => apiGet<Page<ShipmentSummary>>(`/shipments?${qs}`, { signal }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useShipment(id: string) {
+  return useQuery({
+    queryKey: queryKeys.shipment(id),
+    queryFn: ({ signal }) => apiGet<ShipmentDetail>(`/shipments/${id}`, { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useShipmentsSummary() {
+  return useQuery({
+    queryKey: queryKeys.shipmentsSummary,
+    queryFn: ({ signal }) => apiGet<ShipmentsSummary>("/shipments/summary", { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCarrierPerformance() {
+  return useQuery({
+    queryKey: queryKeys.carrierPerformance,
+    queryFn: ({ signal }) => apiGet<CarrierPerformance[]>("/carriers/performance", { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+function useInvalidateShipments() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["shipments"] });
+    void qc.invalidateQueries({ queryKey: queryKeys.carrierPerformance });
+  };
+}
+
+export function useTrackShipment() {
+  const invalidate = useInvalidateShipments();
+  return useMutation({
+    mutationFn: (body: { carrier: string; reference: string; reference_type?: string }) =>
+      apiPost<ShipmentDetail>("/shipments/track", body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRefreshShipment(id: string) {
+  const invalidate = useInvalidateShipments();
+  return useMutation({
+    mutationFn: () => apiPost<ShipmentDetail>(`/shipments/${id}/refresh`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportShipments() {
+  const invalidate = useInvalidateShipments();
+  return useMutation({
+    // 422 still carries the per-row report, so it is returned rather than thrown.
+    mutationFn: (csv: string) =>
+      apiPost<ImportReport>("/shipments/import", csv, { contentType: "text/csv", acceptStatuses: [422] }),
+    onSuccess: (report) => {
+      if (report.ok) invalidate();
+    },
   });
 }

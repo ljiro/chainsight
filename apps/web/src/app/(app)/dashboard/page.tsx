@@ -1,4 +1,4 @@
-import { AlertTriangle, Package, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CarrierStatusList } from "@/components/dashboard/carrier-status-list";
@@ -8,6 +8,7 @@ import {
   ApproachingCard,
   FleetActivityCard,
   MonitoredVesselsKpi,
+  ShipmentKpis,
 } from "@/components/dashboard/fleet-cards";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SystemHealthCard } from "@/components/dashboard/system-health-card";
@@ -25,9 +26,8 @@ export default function DashboardPage() {
       />
 
       <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Active shipments" value={null} icon={Package} unavailableReason="Shipment tracking arrives in Phase 3" />
+        <ShipmentKpis />
         <MonitoredVesselsKpi />
-        <KpiCard label="Delayed shipments" value={null} icon={AlertTriangle} unavailableReason="Requires shipment events (Phase 3)" />
         <KpiCard label="High-risk shipments" value={null} icon={ShieldAlert} unavailableReason="Requires delay model (Phase 4)" />
       </section>
 

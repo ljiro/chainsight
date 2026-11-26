@@ -1,12 +1,12 @@
 "use client";
 
-import { AlertOctagon, AlertTriangle, Info, Ship } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Info, Package, Ship } from "lucide-react";
 import Link from "next/link";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAlerts, useApproaching, useFleetSummary } from "@/lib/queries";
+import { useAlerts, useApproaching, useFleetSummary, useShipmentsSummary } from "@/lib/queries";
 import type { Alert } from "@/lib/types";
 import { formatAge, humanize } from "@/lib/utils";
 
@@ -164,5 +164,25 @@ export function AlertsCard() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+export function ShipmentKpis() {
+  const { data, error, isPending } = useShipmentsSummary();
+  const synthetic = (data?.by_data_mode.synthetic ?? 0) > 0;
+  const tag = synthetic ? <Badge tone="synthetic">incl. synthetic</Badge> : null;
+  const reason = isPending ? "Loading…" : error ? "Shipment data unavailable" : "Track or import a shipment";
+  const has = !!data && data.total > 0;
+  return (
+    <>
+      <KpiCard label="Active shipments" value={has ? data.active : null} icon={Package} unavailableReason={reason} tag={tag} />
+      <KpiCard
+        label="Delayed shipments"
+        value={has ? data.delayed : null}
+        icon={AlertTriangle}
+        unavailableReason={reason}
+        tag={tag}
+      />
+    </>
   );
 }
