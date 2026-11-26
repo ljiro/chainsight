@@ -43,7 +43,7 @@ lint: ## Lint backend and frontend
 	uv run ruff format --check .
 	cd apps/web && npm run lint && npm run typecheck
 typecheck: ## Static type checks (backend)
-	uv run mypy core database integrations apps/api/chainsight_api services
+	uv run mypy core database integrations ml apps/api/chainsight_api services
 test: ## Run all tests (integration tests need TEST_DATABASE_URL)
 	uv run pytest
 	cd apps/web && npm test

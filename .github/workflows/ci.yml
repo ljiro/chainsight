@@ -46,7 +46,7 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
       - name: Type check
-        run: uv run mypy core database integrations apps/api/chainsight_api services
+        run: uv run mypy core database integrations ml apps/api/chainsight_api services
       - name: Migrations apply cleanly
         run: uv run alembic upgrade head
       - name: Tests
