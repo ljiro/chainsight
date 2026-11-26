@@ -357,3 +357,115 @@ export interface CarrierPerformance {
   on_time_rate: number | null;
   avg_arrival_delay_hours: number | null;
 }
+
+// ---- Predictive intelligence (Phase 4) -------------------------------------------------
+
+export type ModelEvaluation = {
+  split: string;
+  metrics: Record<string, unknown>;
+  n_samples: number | null;
+  data_mode: string | null;
+  evaluated_at: string;
+};
+
+export type ModelVersion = {
+  id: string;
+  model_name: "eta" | "delay" | "congestion" | string;
+  version: string;
+  algorithm: string;
+  status: "production" | "candidate" | "retired" | string;
+  is_synthetic_trained: boolean;
+  n_train: number | null;
+  n_test: number | null;
+  training_window_start: string | null;
+  training_window_end: string | null;
+  feature_schema: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+  evaluations: ModelEvaluation[];
+  predictions: number;
+};
+
+type ModelRef = { model_version: string; model_algorithm: string; is_synthetic_trained: boolean };
+
+export type EtaPrediction = ModelRef & {
+  id: string;
+  vessel_id: string;
+  vessel_name: string | null;
+  mmsi: number | null;
+  target_unlocode: string | null;
+  target_port_name: string | null;
+  predicted_at: string;
+  input_data_as_of: string;
+  predicted_arrival_at: string;
+  lower_bound_at: string | null;
+  upper_bound_at: string | null;
+  interval_level: number | null;
+  remaining_distance_nm: number | null;
+  interval_method: string | null;
+  fallback_reason: string | null;
+  actual_arrival_at: string | null;
+  error_hours: number | null;
+};
+
+export type RiskFactor = { factor: string; text: string; value_hours?: number };
+
+export type DelayPrediction = ModelRef & {
+  id: string;
+  shipment_id: string;
+  reference_value: string;
+  carrier_name: string;
+  destination_unlocode: string | null;
+  predicted_at: string;
+  input_data_as_of: string;
+  delay_probability: number;
+  threshold_hours: number;
+  calibration_method: string | null;
+  actual_delayed: boolean | null;
+  actual_delay_hours: number | null;
+  shipment_data_mode: string;
+  factors: RiskFactor[];
+};
+
+export type ForecastPoint = { target_time: string; value: number; lower: number | null; upper: number | null };
+
+export type CongestionPort = {
+  port_id: string;
+  unlocode: string;
+  name: string;
+  current_value: number | null;
+  observed_at: string | null;
+  history_hours: number;
+  forecast: ForecastPoint[];
+  method: string | null;
+  predicted_at: string;
+};
+
+export type PortCongestion = {
+  port_id: string;
+  observations: Record<string, { t: string; value: number }[]>;
+  forecast: ForecastPoint[];
+  method: string | null;
+};
+
+export type VesselAnomaly = {
+  id: string;
+  vessel_id: string;
+  vessel_name: string | null;
+  severity: "info" | "warning" | "critical" | string;
+  title: string;
+  message: string;
+  type: string;
+  evidence: Record<string, unknown>;
+  raised_at: string;
+  resolved_at: string | null;
+};
+
+export type PredictionsSummary = {
+  eta_vessels: number;
+  high_risk: number;
+  delay_model_synthetic: boolean | null;
+  open_anomalies: number;
+  congestion_ports: number;
+  eta_resolved: number;
+};

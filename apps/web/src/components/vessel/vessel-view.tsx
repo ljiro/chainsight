@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { FleetMap } from "@/components/fleet/fleet-map";
 import { CarrierAssociationText, VesselClassText } from "@/components/fleet/vessel-panel";
-import { PlannedFeature } from "@/components/planned-feature";
+import { VesselAnomaliesCard, VesselEtaCard } from "@/components/predictions/prediction-cards";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/query-state";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -230,7 +230,8 @@ export function VesselView({ id }: { id: string }) {
               ) : null}
             </CardContent>
           </Card>
-          <PlannedFeature title="Anomaly alerts" phase={4} description="Unexpected stops, route deviations, speed changes, and AIS gaps for this vessel." />
+          <VesselEtaCard vesselId={v.id} />
+          <VesselAnomaliesCard vesselId={v.id} />
         </div>
       </div>
     </div>

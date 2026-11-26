@@ -1,4 +1,3 @@
-import { ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CarrierStatusList } from "@/components/dashboard/carrier-status-list";
@@ -10,7 +9,7 @@ import {
   MonitoredVesselsKpi,
   ShipmentKpis,
 } from "@/components/dashboard/fleet-cards";
-import { KpiCard } from "@/components/dashboard/kpi-card";
+import { HighRiskKpi } from "@/components/predictions/prediction-cards";
 import { SystemHealthCard } from "@/components/dashboard/system-health-card";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +27,7 @@ export default function DashboardPage() {
       <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <ShipmentKpis />
         <MonitoredVesselsKpi />
-        <KpiCard label="High-risk shipments" value={null} icon={ShieldAlert} unavailableReason="Requires delay model (Phase 4)" />
+        <HighRiskKpi />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">

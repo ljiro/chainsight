@@ -50,3 +50,8 @@ export function formatTime(iso: string | null): string {
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC", timeZoneName: "short",
   });
 }
+
+/** "14:05" in UTC, for compact ranges next to a full `formatTime`. */
+export function formatClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+}

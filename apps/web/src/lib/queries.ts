@@ -18,6 +18,13 @@ import type {
   ReadinessResponse,
   TrackResponse,
   VesselDetail,
+  CongestionPort,
+  DelayPrediction,
+  EtaPrediction,
+  ModelVersion,
+  PortCongestion,
+  PredictionsSummary,
+  VesselAnomaly,
 } from "./types";
 
 export const queryKeys = {
@@ -36,6 +43,15 @@ export const queryKeys = {
   shipment: (id: string) => ["shipments", "detail", id] as const,
   shipmentsSummary: ["shipments", "summary"] as const,
   carrierPerformance: ["carriers", "performance"] as const,
+  models: ["predictions", "models"] as const,
+  predictionsSummary: ["predictions", "summary"] as const,
+  etaPredictions: ["predictions", "eta"] as const,
+  vesselEta: (id: string) => ["predictions", "eta", id] as const,
+  delayPredictions: ["predictions", "delay"] as const,
+  shipmentDelay: (id: string) => ["predictions", "delay", id] as const,
+  congestion: ["predictions", "congestion"] as const,
+  portCongestion: (id: string) => ["predictions", "congestion", id] as const,
+  anomalies: (vesselId: string | null, status: string) => ["predictions", "anomalies", vesselId, status] as const,
 };
 
 export function useReadiness() {
@@ -203,5 +219,85 @@ export function useImportShipments() {
     onSuccess: (report) => {
       if (report.ok) invalidate();
     },
+  });
+}
+
+// ---- Predictive intelligence ---------------------------------------------------------------
+
+export function useModels() {
+  return useQuery({
+    queryKey: queryKeys.models,
+    queryFn: ({ signal }) => apiGet<ModelVersion[]>("/models", { signal }),
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export function usePredictionsSummary() {
+  return useQuery({
+    queryKey: queryKeys.predictionsSummary,
+    queryFn: ({ signal }) => apiGet<PredictionsSummary>("/predictions/summary", { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useEtaPredictions() {
+  return useQuery({
+    queryKey: queryKeys.etaPredictions,
+    queryFn: ({ signal }) => apiGet<EtaPrediction[]>("/predictions/eta?limit=50", { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useVesselEta(id: string) {
+  return useQuery({
+    queryKey: queryKeys.vesselEta(id),
+    queryFn: ({ signal }) => apiGet<EtaPrediction[]>(`/vessels/${id}/eta`, { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useDelayPredictions() {
+  return useQuery({
+    queryKey: queryKeys.delayPredictions,
+    queryFn: ({ signal }) => apiGet<DelayPrediction[]>("/predictions/delay?limit=50", { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useShipmentDelayRisk(id: string) {
+  return useQuery({
+    queryKey: queryKeys.shipmentDelay(id),
+    queryFn: ({ signal }) => apiGet<DelayPrediction[]>(`/shipments/${id}/delay-risk`, { signal }),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCongestion() {
+  return useQuery({
+    queryKey: queryKeys.congestion,
+    queryFn: ({ signal }) => apiGet<CongestionPort[]>("/predictions/congestion?limit=20", { signal }),
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export function usePortCongestion(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.portCongestion(id ?? ""),
+    queryFn: ({ signal }) => apiGet<PortCongestion>(`/ports/${id}/congestion`, { signal }),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export function useAnomalies(vesselId: string | null, status: "open" | "resolved" | "all" = "open") {
+  return useQuery({
+    queryKey: queryKeys.anomalies(vesselId, status),
+    queryFn: ({ signal }) => {
+      const qs = new URLSearchParams({ status, limit: "50" });
+      if (vesselId) qs.set("vessel_id", vesselId);
+      return apiGet<VesselAnomaly[]>(`/anomalies?${qs}`, { signal });
+    },
+    refetchInterval: 60_000,
   });
 }

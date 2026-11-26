@@ -3,6 +3,7 @@
 import { ArrowLeft, ExternalLink, Loader2, RefreshCw, Ship } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ShipmentDelayCard } from "@/components/predictions/prediction-cards";
 import { DelayBadge, ShipmentStatusBadge, formatDelay } from "@/components/shipments/badges";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/query-state";
 import { StatusBadge } from "@/components/status-badge";
@@ -158,6 +159,7 @@ export function ShipmentView({ id }: { id: string }) {
         </Card>
 
         <div className="flex flex-col gap-6">
+          <ShipmentDelayCard shipmentId={s.id} />
           <Card>
             <CardHeader>
               <CardTitle>Vessels</CardTitle>
