@@ -118,7 +118,13 @@ def downgrade() -> None:
         {"codes": codes},
     )
     bind.execute(sa.text("DELETE FROM carriers WHERE code = ANY(:codes)"), {"codes": codes})
+    keys = [d["key"] for d in DATA_SOURCES]
+    # Logs of these sources' runs reference them; they go with the sources.
     bind.execute(
-        sa.text("DELETE FROM data_sources WHERE key = ANY(:keys)"),
-        {"keys": [d["key"] for d in DATA_SOURCES]},
+        sa.text(
+            "DELETE FROM ingestion_logs WHERE data_source_id IN "
+            "(SELECT id FROM data_sources WHERE key = ANY(:keys))"
+        ),
+        {"keys": keys},
     )
+    bind.execute(sa.text("DELETE FROM data_sources WHERE key = ANY(:keys)"), {"keys": keys})
