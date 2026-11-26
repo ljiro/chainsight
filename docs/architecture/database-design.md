@@ -95,7 +95,10 @@ system_alerts, audit_logs
 
 **port_observations** (hypertable on `observed_at`): `port_id`, `observed_at`, `available_at`, `metric` (e.g. `vessels_in_port`, `arrivals`, `avg_wait_hours`, `portcalls_container`), `value`, `source_id`. PK `(port_id, metric, observed_at, source_id)`.
 
-### 3.3 Phase 3: shipment intelligence
+### 3.3 Phase 3: shipment intelligence (implemented in `0004`)
+
+As built: `shipments` also stores derived `current_eta_at`, `actual_arrival_at`, `delay_hours`, `delay_status` and `last_refreshed_at`; `shipment_events` dedupes on `(shipment_id, dedupe_key)`, where the key is the provider event id or a content fingerprint. Until auth (Phase 6), everything belongs to the seeded `local` organization.
+
 
 **shipments**: `id`, `organization_id`, `carrier_id`, `reference_type ∈ {container, booking, bill_of_lading}`, `reference_value`, `origin_port_id`, `destination_port_id`, `status` (derived current state), `planned_arrival_at` (the **original** plan, write-once), `source_id`, timestamps. `UNIQUE(organization_id, carrier_id, reference_type, reference_value)`.
 

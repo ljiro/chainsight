@@ -29,7 +29,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 
 **Exit criteria:** all tests pass locally, and the readiness endpoint reports DB/PostGIS/Redis healthy.
 
-### Phase 2: Fleet tracking ✅ (awaiting review)
+### Phase 2: Fleet tracking ✅
 - Schema: vessels, identifiers, vessel_carrier_history, vessel_positions (hypertable), voyages, port calls, port areas, maritime_routes, port_observations.
 - Port registry import (UN/LOCODE, with 8 km geofences).
 - AISStream adapter + consumer process + replay and simulator providers. Dedup, quality flags, freshness alerts.
@@ -40,7 +40,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 - Open-Meteo collector for ports.
 - **Starts AIS history collection.**
 
-### Phase 3: Shipment tracking
+### Phase 3: Shipment tracking ✅ (awaiting review)
 - Schema: shipments, containers, shipment_items, shipment_vessels, shipment_events.
 - Carrier adapter base (retries, rate limits, logging, status) + mock carrier + CSV import.
 - One real carrier adapter if credentials are available (first candidates: Maersk or Hapag-Lloyd via DCSA T&T).

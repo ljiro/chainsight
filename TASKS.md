@@ -49,19 +49,22 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] UI: `/vessels/[id]`; dashboard fleet activity, approaching ports, open alerts
 - [x] Tests: backend 164 (unit + integration incl. pipeline, collectors, API, WebSocket); frontend 54
 - [ ] Route-deviation detection (moved to Phase 4 anomaly detection)
+- [x] AISStream stability: handshake/ping timeouts tuned after live measurement (handshake ~11.5 s); ingestion timing metrics
 - [ ] IMF PortWatch collector (moved to Phase 5, where its publication lag matters)
 
 ## Phase 3 — Shipment tracking
-- [ ] Migration: shipments, containers, shipment_items, shipment_vessels, shipment_events
-- [ ] `CarrierAdapter` base: retries/backoff, rate limiting, validation, logging, status
-- [ ] DCSA-based event normalization + code mapping tables
-- [ ] Mock carrier adapter (synthetic, labeled)
-- [ ] CSV shipment import (validation, ISO 6346 check digit)
-- [ ] Real carrier adapter (if credentials available)
-- [ ] Milestone derivation (PLANNED/ESTIMATED/ACTUAL) + rule-based delay detection
-- [ ] API: shipments, containers, events, carrier integrations
-- [ ] UI: `/shipments` (search, list, timeline, vessel, status), `/carriers`
-- [ ] Tests: normalization, mocked HTTP adapters, CSV import, search UI, carrier filters
+- [x] Migration `0004`: shipments, containers, shipment_items, shipment_vessels, shipment_events (append-only); local workspace org, demo carrier, carrier-demo/csv-import sources — round-trip + drift tested
+- [x] `CarrierAdapter` base: retries/backoff (Retry-After), token-bucket rate limiting, response validation, call records, status reporting
+- [x] DCSA-based event normalization + code mapping (unknown codes kept raw and reported)
+- [x] Generic DCSA Track & Trace adapter (API key / bearer / OAuth2) — tested with mocked HTTP; **not verified against any live carrier (no credentials)**
+- [x] Demo carrier adapter (synthetic; only answers DEMO/ZZZU references)
+- [x] CSV shipment import (validation incl. ISO 6346 + IMO checksums, timezone-aware timestamps; all-or-nothing; idempotent)
+- [ ] Real carrier integration — *blocked: needs carrier API credentials (see docs/integrations/carriers.md)*
+- [x] Milestone derivation (PLANNED/ESTIMATED/ACTUAL, write-once original plan) + rule-based delay detection
+- [x] Honest integration statuses (authentication_required / unavailable / demo_data_only), synced at startup and every 10 min
+- [x] API: shipments (search, summary, track, detail, refresh, CSV import), carrier performance
+- [x] UI: `/shipments` (track, import, list, filters), `/shipments/[id]` (milestones, estimate history, vessel legs with AIS link), `/carriers` comparison, dashboard shipment KPIs
+- [x] Tests: backend 225 (unit + integration incl. mocked DCSA carrier, CSV import, API); frontend 73
 
 ## Phase 4 — Predictive intelligence
 - [ ] Migration: model_versions, model_evaluations, eta_predictions, delay_predictions, risk_assessments

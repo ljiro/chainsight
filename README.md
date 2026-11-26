@@ -2,7 +2,7 @@
 
 Open-source maritime intelligence and quantitative analytics: real-time vessel tracking, multi-carrier shipment visibility, predictive logistics models, and alternative-data research, with honest data provenance throughout.
 
-> **Status: Phase 2 (Fleet tracking).** AIS ingestion (AISStream, or a clearly labeled synthetic simulator), vessel registry, port calls from UN/LOCODE geofences, port weather from Open-Meteo, and a live fleet map. Shipment tracking (Phase 3) and models (Phase 4) are not built yet, and the UI says so. See [TASKS.md](TASKS.md) and the [roadmap](docs/architecture/development-roadmap.md).
+> **Status: Phase 3 (Shipment tracking).** Live AIS fleet map with vessel registry, port calls and port weather; shipment tracking through a carrier adapter framework (generic DCSA Track & Trace adapter, a clearly labeled demo carrier, and CSV import) with planned/estimated/actual milestones and delay detection against the original plan. Predictive models (Phase 4) are not built yet, and the UI says so. See [TASKS.md](TASKS.md) and the [roadmap](docs/architecture/development-roadmap.md).
 
 ## Principles
 
@@ -84,7 +84,7 @@ All configuration comes from environment variables ([.env.example](.env.example)
 
 ## Data sources
 
-See [integration-strategy.md](docs/architecture/integration-strategy.md) for each provider's access requirements, licensing, and data mode, and [docs/integrations/](docs/integrations/) for setup guides (AIS, ports, weather). Port codes and coordinates: UN/LOCODE (UNECE). Basemap: OpenFreeMap / OpenStreetMap contributors. Weather data, when enabled, is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). AIS data, when enabled, comes from [aisstream.io](https://aisstream.io/).
+See [integration-strategy.md](docs/architecture/integration-strategy.md) for each provider's access requirements, licensing, and data mode, and [docs/integrations/](docs/integrations/) for setup guides (AIS, ports, weather, carriers). Port codes and coordinates: UN/LOCODE (UNECE). Basemap: OpenFreeMap / OpenStreetMap contributors. Weather data, when enabled, is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). AIS data, when enabled, comes from [aisstream.io](https://aisstream.io/).
 
 ## License
 
