@@ -5,6 +5,7 @@ Provider credentials are `SecretStr` so they never appear in logs, reprs, or API
 
 from __future__ import annotations
 
+import json
 import os
 from enum import StrEnum
 from functools import lru_cache
@@ -24,6 +25,7 @@ class AisProvider(StrEnum):
     DISABLED = "disabled"
     AISSTREAM = "aisstream"
     REPLAY = "replay"
+    SIMULATOR = "simulator"
 
 
 # Set CHAINSIGHT_ENV_FILE="" to ignore `.env` entirely (the test suite does this).
@@ -60,8 +62,27 @@ class Settings(BaseSettings):
     # Integrations (Phase 2+). Empty means "not configured" -> reported honestly in the UI.
     ais_provider: AisProvider = AisProvider.DISABLED
     aisstream_api_key: SecretStr | None = None
+    # JSON list of boxes [[[lat1, lon1], [lat2, lon2]], ...]; default: whole world.
+    ais_bounding_boxes: Annotated[list[list[list[float]]], NoDecode] = Field(
+        default_factory=lambda: [[[-90.0, -180.0], [90.0, 180.0]]]
+    )
     ais_replay_file: str | None = None
+    ais_replay_speed: float = Field(default=1.0, ge=0)
+    ais_record_file: str | None = None
+    ais_simulator_vessels: int = Field(default=24, ge=1, le=24)
+    ais_simulator_interval_seconds: float = Field(default=30.0, gt=0)
+    ais_batch_size: int = Field(default=500, ge=1)
+    ais_flush_interval_seconds: float = Field(default=1.0, gt=0)
+
+    port_geofence_radius_m: int = Field(default=8000, ge=500, le=50_000)
+    un_locode_url: str = (
+        "https://raw.githubusercontent.com/datasets/un-locode/main/data/code-list.csv"
+    )
+
     open_meteo_api_key: SecretStr | None = None
+    open_meteo_base_url: str = "https://api.open-meteo.com/v1/forecast"
+    weather_port_unlocodes: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    weather_max_ports: int = Field(default=50, ge=1, le=500)
 
     maersk_consumer_key: SecretStr | None = None
     maersk_consumer_secret: SecretStr | None = None
@@ -74,11 +95,18 @@ class Settings(BaseSettings):
     fred_api_key: SecretStr | None = None
     eia_api_key: SecretStr | None = None
 
-    @field_validator("api_cors_origins", mode="before")
+    @field_validator("api_cors_origins", "weather_port_unlocodes", mode="before")
     @classmethod
-    def _split_origins(cls, value: object) -> object:
+    def _split_csv(cls, value: object) -> object:
         if isinstance(value, str):
             return [o.strip() for o in value.split(",") if o.strip()]
+        return value
+
+    @field_validator("ais_bounding_boxes", mode="before")
+    @classmethod
+    def _parse_boxes(cls, value: object) -> object:
+        if isinstance(value, str):
+            return json.loads(value) if value.strip() else [[[-90.0, -180.0], [90.0, 180.0]]]
         return value
 
     @field_validator(
