@@ -146,10 +146,9 @@ async def congestion_overview(
                         ORDER BY c.target_time)
                     FROM congestion_predictions c
                     WHERE c.port_id = p.id AND c.predicted_at = lr.predicted_at) AS forecast,
-                   (SELECT m.version FROM congestion_predictions c
+                   (SELECT string_agg(DISTINCT m.version, ' + ') FROM congestion_predictions c
                      JOIN model_versions m ON m.id = c.model_version_id
-                     WHERE c.port_id = p.id AND c.predicted_at = lr.predicted_at
-                     ORDER BY c.target_time LIMIT 1) AS method,
+                     WHERE c.port_id = p.id AND c.predicted_at = lr.predicted_at) AS method,
                    lr.predicted_at
             FROM latest_run lr JOIN ports p ON p.id = lr.port_id
             ORDER BY current_value DESC NULLS LAST LIMIT :limit

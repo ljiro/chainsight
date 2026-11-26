@@ -24,6 +24,19 @@ SEASONAL_VERSION = "seasonal-naive-24h-v1"
 PERSISTENCE_VERSION = "persistence-v1"
 HORIZON_H = 24
 MIN_ERRORS_FOR_INTERVAL = 24
+# Vessels already in port when tracking starts are only detected as their positions arrive, so
+# the first hours of observations under-count. They are kept (they are what we knew) but never
+# used as forecast inputs.
+WARMUP_H = 3
+
+
+def usable_history(
+    history: dict[datetime, float], coverage_start: datetime | None
+) -> dict[datetime, float]:
+    if coverage_start is None:
+        return history
+    cutoff = coverage_start + timedelta(hours=WARMUP_H)
+    return {t: v for t, v in history.items() if t >= cutoff}
 
 
 def _hour(t: datetime) -> datetime:
@@ -108,6 +121,7 @@ def forecast(conn: Connection, now: datetime, *, top_ports: int = 20) -> int:
         .scalars()
         .all()
     )
+    coverage_start = conn.execute(sa.text("SELECT min(created_at) FROM voyage_port_calls")).scalar()
     rows = []
     base = _hour(now)
     for port_id in ports:
@@ -139,7 +153,7 @@ def forecast(conn: Connection, now: datetime, *, top_ports: int = 20) -> int:
         )
         for step in range(1, HORIZON_H + 1):
             target = base + timedelta(hours=step)
-            known = {t: v for t, v in history.items() if t <= base}
+            known = usable_history({t: v for t, v in history.items() if t <= base}, coverage_start)
             value, method = seasonal_naive(known, target)
             if value is None:
                 continue
