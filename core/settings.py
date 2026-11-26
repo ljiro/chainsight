@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     shipment_delay_threshold_hours: float = Field(default=12.0, ge=0)
     shipment_auto_refresh_minutes: int = Field(default=60, ge=5)
 
+    # Machine learning (Phase 4)
+    mlflow_tracking_uri: str | None = "sqlite:///./data/mlflow.db"
+    model_artifact_dir: str = "./data/models"
+    eta_min_training_voyages: int = Field(default=50, ge=1)
+    delay_min_training_shipments: int = Field(default=200, ge=1)
+    delay_alert_probability: float = Field(default=0.7, ge=0, le=1)
+
     maersk_consumer_key: SecretStr | None = None
     maersk_consumer_secret: SecretStr | None = None
     hapag_lloyd_client_id: SecretStr | None = None
