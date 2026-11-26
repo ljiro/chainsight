@@ -32,6 +32,7 @@ def create_celery() -> Celery:
             "ingest.*": {"queue": "ingest"},
             "carriers.*": {"queue": "ingest"},
             "ml.*": {"queue": "ml"},
+            "research.*": {"queue": "ml"},
         },
         task_acks_late=True,
         task_reject_on_worker_lost=True,
@@ -52,6 +53,11 @@ def create_celery() -> Celery:
             "ml-predict": {"task": "ml.predict", "schedule": 1800.0},
             "ml-congestion": {"task": "ml.congestion", "schedule": crontab(minute=2)},
             "ml-evaluate": {"task": "ml.evaluate", "schedule": crontab(minute=15)},
+            # PortWatch publishes on Tuesdays around 11:00 UTC; FRED daily.
+            "research-refresh": {
+                "task": "research.refresh",
+                "schedule": crontab(hour=13, minute=30),
+            },
         },
     )
     app.autodiscover_tasks(["services.worker"], related_name="tasks", force=True)

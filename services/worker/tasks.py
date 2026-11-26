@@ -145,3 +145,15 @@ def ml_evaluate() -> dict[str, int]:
     from services.ml_jobs import run_evaluation
 
     return run_evaluation(get_sync_engine(), utcnow())
+
+
+@shared_task(name="research.refresh")  # type: ignore[untyped-decorator]
+def research_refresh() -> dict[str, Any]:
+    """Daily: collect PortWatch (weekly releases) and FRED, then rebuild the stored dataset."""
+    from ml.quant_research.datasets import build_dataset
+    from services.research_jobs import collect
+
+    engine = get_sync_engine()
+    out = collect(engine)
+    out["dataset"] = build_dataset(engine)
+    return out

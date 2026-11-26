@@ -24,6 +24,7 @@ dependencies = [
   "pandas>=2.2",
   "scikit-learn>=1.5",
   "mlflow-skinny>=2.17",
+  "statsmodels>=0.14",
 ]
 
 [dependency-groups]
@@ -81,6 +82,7 @@ known-first-party = ["core", "database", "integrations", "services", "ml", "chai
 "services/fleet_tracking/queries.py" = ["S608"]
 "services/shipment_tracking/queries.py" = ["S608"]
 "services/prediction_queries.py" = ["S608"]
+"services/research_service.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
