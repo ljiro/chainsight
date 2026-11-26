@@ -75,3 +75,60 @@ class AlertSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
+
+
+class VesselClass(StrEnum):
+    """Coarse class. AIS ship types cannot distinguish container/bulk/LNG; those values are
+    reserved for registry enrichment and must never be inferred from AIS alone."""
+
+    CARGO = "cargo"
+    TANKER = "tanker"
+    PASSENGER = "passenger"
+    FISHING = "fishing"
+    TUG_SERVICE = "tug_service"
+    PLEASURE = "pleasure"
+    HIGH_SPEED = "high_speed"
+    OTHER = "other"
+    UNKNOWN = "unknown"
+    CONTAINER = "container"
+    BULK = "bulk"
+    LNG_CARRIER = "lng_carrier"
+    LPG_CARRIER = "lpg_carrier"
+
+
+class VesselIdentifierScheme(StrEnum):
+    MMSI = "mmsi"
+    IMO = "imo"
+    CALL_SIGN = "call_sign"
+    NAME = "name"
+
+
+class CarrierRelation(StrEnum):
+    OPERATOR = "operator"
+    OWNER = "owner"
+    CHARTERER = "charterer"
+    SLOT = "slot"
+
+
+class AssociationMethod(StrEnum):
+    NAME_HEURISTIC = "name_heuristic"
+    MANUAL = "manual"
+    CARRIER_API = "carrier_api"
+
+
+class VoyageStatus(StrEnum):
+    PLANNED = "planned"
+    UNDERWAY = "underway"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class PortCallDetection(StrEnum):
+    CARRIER_SCHEDULE = "carrier_schedule"
+    AIS_GEOFENCE = "ais_geofence"
+
+
+class WeatherKind(StrEnum):
+    CURRENT = "current"
+    FORECAST = "forecast"
+    HISTORICAL = "historical"

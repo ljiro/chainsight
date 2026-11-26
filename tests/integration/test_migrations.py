@@ -72,7 +72,15 @@ def test_reference_data_seeded(migrated_db: Engine) -> None:
         ("shipment_tracking", "unavailable")
     }
     assert len(integrations) == len(codes)
-    assert {s.key for s in sources} == {"aisstream", "open-meteo", "imf-portwatch", "un-comtrade"}
+    assert {s.key for s in sources} == {
+        "aisstream",
+        "open-meteo",
+        "imf-portwatch",
+        "un-comtrade",
+        "ais-simulator",
+        "ais-replay",
+        "un-locode",
+    }
     assert {s.status for s in sources} == {"not_configured"}
 
 
