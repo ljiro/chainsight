@@ -2,7 +2,7 @@
 
 Open-source maritime intelligence and quantitative analytics: real-time vessel tracking, multi-carrier shipment visibility, predictive logistics models, and alternative-data research, with honest data provenance throughout.
 
-> **Status: Phase 4 (Predictive intelligence).** Live AIS fleet map with vessel registry, port calls and port weather; shipment tracking through a carrier adapter framework (generic DCSA Track & Trace adapter, a clearly labeled demo carrier, and CSV import); and versioned, append-only predictions: vessel ETA (quantile gradient boosting inside its training domain, a physics baseline elsewhere), rule-based vessel anomalies, and port congestion forecasts. No delay model is in production until real shipment arrivals exist. Limits are in the [model cards](docs/ml/README.md). See [TASKS.md](TASKS.md) and the [roadmap](docs/architecture/development-roadmap.md).
+> **Status: Phase 5 (Quantitative research).** Live AIS fleet map with vessel registry, port calls and port weather; shipment tracking through a carrier adapter framework (generic DCSA adapter, a labeled demo carrier, CSV import); versioned, append-only predictions (vessel ETA, anomalies, port congestion; no delay model until real arrivals exist); and a point-in-time research workspace: IMF PortWatch port and chokepoint activity against FRED energy prices, statistical tests, and walk-forward backtests with costs and a buy-and-hold benchmark. Research results are not investment advice; see the [model cards](docs/ml/README.md) and [research methodology](docs/research/methodology.md).
 
 ## Principles
 

@@ -50,7 +50,7 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] Tests: backend 164 (unit + integration incl. pipeline, collectors, API, WebSocket); frontend 54
 - [ ] Route-deviation detection (moved to Phase 4 anomaly detection)
 - [x] AISStream stability: handshake/ping timeouts tuned after live measurement (handshake ~11.5 s); ingestion timing metrics
-- [ ] IMF PortWatch collector (moved to Phase 5, where its publication lag matters)
+- [x] IMF PortWatch collector (delivered in Phase 5, where its publication lag matters)
 
 ## Phase 3 — Shipment tracking
 - [x] Migration `0004`: shipments, containers, shipment_items, shipment_vessels, shipment_events (append-only); local workspace org, demo carrier, carrier-demo/csv-import sources — round-trip + drift tested
@@ -83,14 +83,19 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [ ] ETA beyond final approach — *needs longer AIS history (labels are right-censored at the ingest window)*
 
 ## Phase 5 — Quantitative research
-- [ ] Migration: research_datasets, maritime_features (hypertable), research_experiments, research_signals, backtest_runs, backtest_metrics
-- [ ] Feature engineering (configurable frequency)
-- [ ] PortWatch + FRED/EIA collectors with `available_at`
-- [ ] Statistical analysis toolkit
-- [ ] Walk-forward backtester (costs, slippage, sizing, drawdown, Sharpe, turnover, benchmark)
-- [ ] Look-ahead / leakage tests
-- [ ] UI: `/research`
-- [ ] Research methodology docs + limitations
+- [x] Migration `0006`: indicator_series + indicator_observations (hypertable, revisions), research_datasets, maritime_features (hypertable, versions), research_experiments, backtest_runs, backtest_metrics, research_signals; FRED source — round-trip + drift tested
+- [x] IMF PortWatch collector (8 a priori ports + 28 chokepoints, 2019 →) and FRED collector (Brent, WTI, Henry Hub; API key optional) with documented, conservative availability rules; live values use first-seen time; revisions never overwrite
+- [x] Point-in-time features: composites, D/W/M frequencies, level/MA/pct/YoY/z/diff transforms, availability = latest input; AIS-derived daily series
+- [x] Statistics: correlation, lag correlation with noise band, rolling correlation, ADF/KPSS, OLS with HAC errors, Granger, out-of-sample R², permutation importance
+- [x] Walk-forward backtester: costs, slippage, sign/linear sizing, long-only, Sharpe (+ Lo SE), drawdown, turnover, hit rate, information ratio, buy-and-hold benchmark; in-sample shown separately
+- [x] Look-ahead tests: unpublished values never used; perturbing the future leaves past positions unchanged; oracle/noise sanity checks
+- [x] Experiments with stated hypotheses, git SHA + data hash, per-fold parameters, stored positions; three seeded a priori examples (none shows an out-of-sample edge)
+- [x] API: `/research/{indicators,features,market,analysis,importance,experiments}`; daily Celery refresh
+- [x] UI: `/research` (explorer, analysis, experiments, new experiment)
+- [x] Docs: `docs/research/methodology.md`
+- [x] Tests: backend 279 (unit + integration incl. mocked PortWatch/FRED, revisions, reproducibility, API); frontend 92
+- [ ] UN Comtrade / EIA collectors — *optional; need API keys*
+- [ ] Deflated Sharpe / multiple-testing correction across experiments
 
 ## Phase 6 — Production hardening
 - [ ] Authentication (Argon2id, JWT), API keys, RBAC, org isolation

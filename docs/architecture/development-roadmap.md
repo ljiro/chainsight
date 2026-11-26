@@ -58,7 +58,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 - UI: `/predictions`, and prediction widgets on shipment and vessel pages.
 
 ### Phase 5: Quantitative research
-- `ml/quant_research`: feature builders (arrivals/departures, congestion index, tanker/LNG/container intensity, waits, regional activity, rolling/WoW).
+- `ml/quant_research`: point-in-time feature builders (PortWatch port/chokepoint activity, composites, AIS arrivals/departures/waits/deviations; D/W/M; rolling, WoW/YoY, z-scores). Delivered; see docs/research/methodology.md.
 - Statistics: correlations, rolling correlations, OLS with HAC errors, ADF/KPSS, lead-lag cross-correlation, Granger (with caveats).
 - Backtesting: walk-forward, costs, slippage, sizing, drawdown, Sharpe, turnover, and benchmark. Look-ahead guards on `available_at`.
 - Experiments persisted, plus a reproducibility manifest (code SHA, data hash, config).
