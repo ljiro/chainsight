@@ -21,6 +21,7 @@ from sqlalchemy.engine import Connection, Engine
 from core.logging_config import get_logger
 from ml.common.metrics import calibration_bins, classification_metrics
 from ml.common.registry import (
+    ArtifactUnavailable,
     ModelCard,
     dataset_hash,
     load_artifact,
@@ -240,7 +241,12 @@ def predict_live(conn: Connection, now: datetime, *, threshold_hours: float) -> 
     prod = production_version(conn, "delay")
     if prod is None or prod.artifact_uri is None:
         return 0
-    model = load_artifact(prod.artifact_uri)
+    try:
+        model = load_artifact(prod.artifact_uri)
+    except ArtifactUnavailable as exc:
+        # No delay probabilities rather than invented ones.
+        log.warning("delay_model_artifact_unavailable", version=prod.version, error=str(exc))
+        return 0
     # Guardrail: a model trained on synthetic data may only score synthetic shipments.
     synthetic_only = bool(prod.is_synthetic_trained)
     shipments = conn.execute(

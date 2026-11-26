@@ -23,6 +23,7 @@ from core.logging_config import get_logger
 from ml.common.destinations import resolve_destination
 from ml.common.metrics import eta_metrics
 from ml.common.registry import (
+    ArtifactUnavailable,
     ModelCard,
     dataset_hash,
     ensure_rule_version,
@@ -41,6 +42,7 @@ from ml.eta_prediction.features import FEATURES, build_features
 from ml.eta_prediction.model import (
     BASELINE_VERSION,
     BaselineEtaModel,
+    EtaEstimate,
     EtaModel,
     QuantileGbmEtaModel,
 )
@@ -273,17 +275,32 @@ class ActiveEtaModel:
     version: str
     baseline_id: uuid.UUID
     domain: dict[str, float] | None  # None for the baseline (valid everywhere)
+    # Why the baseline is serving although a trained model is in production (e.g. missing artifact).
+    unavailable_reason: str | None = None
 
     def choose(self, f: dict[str, float | int]) -> tuple[uuid.UUID, EtaModel, str, str | None]:
         """Use the trained model only inside its training domain (10 % margin)."""
         if self.domain is None:
-            return self.model_id, self.model, self.version, None
+            return self.model_id, self.model, self.version, self.unavailable_reason
         if (
             float(f["baseline_hours"]) > 1.1 * self.domain["max_label_hours"]
             or float(f["remaining_distance_nm"]) > 1.1 * self.domain["max_distance_nm"]
         ):
             return self.baseline_id, BaselineEtaModel(), BASELINE_VERSION, "out_of_training_domain"
         return self.model_id, self.model, self.version, None
+
+    def saturated(self, est: EtaEstimate) -> bool:
+        """True when a trained model's upper bound reaches its largest training label."""
+        return self.model_id != self.baseline_id and _saturated(self.domain, est.upper_hours)
+
+
+SATURATION_FRACTION = 0.98
+
+
+def _saturated(domain: dict[str, float] | None, upper_hours: float | None) -> bool:
+    if domain is None or upper_hours is None:
+        return False
+    return upper_hours >= SATURATION_FRACTION * domain["max_label_hours"]
 
 
 def _active_model(conn: Connection) -> ActiveEtaModel:
@@ -302,9 +319,19 @@ def _active_model(conn: Connection) -> ActiveEtaModel:
         "max_label_hours": 0.0,
         "max_distance_nm": 0.0,
     }
-    return ActiveEtaModel(
-        prod.id, load_artifact(prod.artifact_uri), prod.version, baseline_id, domain
-    )
+    try:
+        model = load_artifact(prod.artifact_uri)
+    except ArtifactUnavailable as exc:
+        log.warning("eta_model_artifact_unavailable", version=prod.version, error=str(exc))
+        return ActiveEtaModel(
+            baseline_id,
+            BaselineEtaModel(),
+            BASELINE_VERSION,
+            baseline_id,
+            None,
+            "model_artifact_unavailable",
+        )
+    return ActiveEtaModel(prod.id, model, prod.version, baseline_id, domain)
 
 
 def predict_live(conn: Connection, now: datetime) -> int:
@@ -346,6 +373,15 @@ def predict_live(conn: Connection, now: datetime) -> int:
             continue
         model_id, model, version, fallback = active.choose(f.as_dict())
         est = model.predict(pd.DataFrame([f.as_dict()]))[0]
+        if active.saturated(est):
+            # The trained model hit the longest horizon it ever saw: training labels are
+            # right-censored there, so neither the estimate nor its interval is meaningful.
+            model_id, version, fallback = (
+                active.baseline_id,
+                BASELINE_VERSION,
+                "at_training_horizon_limit",
+            )
+            est = BaselineEtaModel().predict(pd.DataFrame([f.as_dict()]))[0]
         base = v.last_seen_at  # predictions are anchored on the input data time
         rows.append(
             {

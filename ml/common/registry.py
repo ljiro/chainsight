@@ -53,16 +53,31 @@ def new_version(prefix: str) -> str:
     return f"{prefix}-{utcnow():%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
 
 
+class ArtifactUnavailable(FileNotFoundError):
+    """A registered model's artifact is not present where this process looks for it."""
+
+
 def save_artifact(model: Any, card: ModelCard, directory: str | None = None) -> str:
-    base = Path(directory or get_settings().model_artifact_dir) / card.model_name
-    base.mkdir(parents=True, exist_ok=True)
-    path = base / f"{card.version}.joblib"
-    joblib.dump({"model": model, "card": card.__dict__}, path)
-    return str(path.resolve())
+    """Write the artifact and return its URI. Under the configured artifact directory the URI
+    is relative to it, so a model trained on one machine (or container) resolves on another
+    that mounts the same directory; an explicit `directory` yields an absolute path."""
+    root = Path(directory or get_settings().model_artifact_dir)
+    rel = Path(card.model_name) / f"{card.version}.joblib"
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump({"model": model, "card": card.__dict__}, root / rel)
+    return str((root / rel).resolve()) if directory else rel.as_posix()
+
+
+def artifact_path(uri: str) -> Path:
+    p = Path(uri)
+    return p if p.is_absolute() else Path(get_settings().model_artifact_dir) / p
 
 
 def load_artifact(uri: str) -> Any:
-    return joblib.load(uri)["model"]
+    path = artifact_path(uri)
+    if not path.is_file():
+        raise ArtifactUnavailable(f"model artifact not found: {path}")
+    return joblib.load(path)["model"]
 
 
 def register(conn: Connection, card: ModelCard, *, status: str = "candidate") -> uuid.UUID:

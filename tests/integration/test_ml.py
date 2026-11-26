@@ -18,6 +18,7 @@ from integrations.carriers.demo import DemoCarrierAdapter
 from integrations.carriers.models import TrackingReference
 from integrations.ports.unlocode import iter_seaports
 from ml.anomaly_detection.runner import run_anomaly_detection
+from ml.common.registry import artifact_path
 from ml.congestion_forecasting import pipeline as congestion
 from ml.delay_prediction import pipeline as delay
 from ml.eta_prediction import pipeline as eta
@@ -207,7 +208,7 @@ def test_eta_synthetic_training_is_flagged_and_never_promoted(
     )[0]
     assert row.is_synthetic_trained and row.status == "candidate"
     assert row.feature_schema["training_domain"]["max_label_hours"] > 0
-    assert Path(row.artifact_uri).exists()
+    assert not Path(row.artifact_uri).is_absolute() and artifact_path(row.artifact_uri).exists()
     evals = q(
         migrated_db,
         "SELECT split, data_mode, metrics FROM model_evaluations WHERE model_version_id = :id",

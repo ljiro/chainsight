@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -67,3 +68,48 @@ def test_drop_implausible_rows() -> None:
     frame = pd.DataFrame({"remaining_distance_nm": [50.0, 4690.0], "label_hours": [5.0, 4.0]})
     kept, dropped = drop_implausible(frame)
     assert dropped == 1 and kept["remaining_distance_nm"].tolist() == [50.0]
+
+
+def test_artifact_uri_is_relative_to_the_artifact_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from core.settings import get_settings
+    from ml.common.registry import ArtifactUnavailable, ModelCard, load_artifact, save_artifact
+
+    monkeypatch.setenv("MODEL_ARTIFACT_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        card = ModelCard("eta", "eta-test-1", "test", False, {})
+        uri = save_artifact({"w": 1}, card)
+        assert uri == "eta/eta-test-1.joblib"  # portable across hosts and containers
+        assert load_artifact(uri) == {"w": 1}
+        with pytest.raises(ArtifactUnavailable):
+            load_artifact("eta/missing.joblib")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_missing_artifact_serves_baseline_with_a_reason() -> None:
+    base_id = uuid.uuid4()
+    active = ActiveEtaModel(
+        base_id,
+        BaselineEtaModel(),
+        "baseline",
+        base_id,
+        None,
+        "model_artifact_unavailable",
+    )
+    chosen = active.choose({"baseline_hours": 3.0, "remaining_distance_nm": 40.0})
+    assert chosen[0] == base_id and chosen[3] == "model_artifact_unavailable"
+
+
+def test_saturated_trained_prediction_is_detected() -> None:
+    from ml.eta_prediction.model import EtaEstimate
+
+    base_id, model_id = uuid.uuid4(), uuid.uuid4()
+    domain = {"max_label_hours": 4.0, "max_distance_nm": 60.0}
+    active = ActiveEtaModel(model_id, object(), "q", base_id, domain)  # type: ignore[arg-type]
+    assert active.saturated(EtaEstimate(4.0, 1.0, 4.0, 0.8, "quantile_gbm_p10_p90"))
+    assert not active.saturated(EtaEstimate(2.0, 1.0, 3.0, 0.8, "quantile_gbm_p10_p90"))
+    baseline_only = ActiveEtaModel(base_id, BaselineEtaModel(), "b", base_id, None)
+    assert not baseline_only.saturated(EtaEstimate(40.0, 32.0, 48.0, None, "heuristic_pm20pct"))
