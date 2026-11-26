@@ -110,6 +110,7 @@ Short-form ADRs. Each will move to `docs/architecture/adr/` when it needs more d
 | ADR-010 | Frontend calls only the ChainSight API via a same-origin Next.js rewrite | No provider keys in the browser, no CORS complexity in production | Direct browser → provider calls (leaks keys) |
 | ADR-011 | uv for Python dependency management, npm for the web app | Fast, lockfile-based, few tools | Poetry; pnpm (adds a tool for a single JS package) |
 | ADR-012 | MLflow (local file or SQLite store in dev) for experiment tracking and model registry; predictions reference `model_versions.id` | Reproducibility and model lineage on every prediction row | W&B (hosted, account required) |
+| ADR-013 | scikit-learn `HistGradientBoosting*` instead of LightGBM/XGBoost for Phase 4 models | Same histogram-based gradient boosting family with native quantile loss and class weights; no OpenMP system library (LightGBM failed to load on macOS without `libomp`), so `uv sync` alone is enough in dev and CI | LightGBM (needs `brew install libomp` on macOS, faster on large data); XGBoost (heavier wheel). Revisit if training sets outgrow HGB |
 
 ## 5. Cross-cutting concerns
 

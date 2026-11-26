@@ -67,16 +67,20 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] Tests: backend 225 (unit + integration incl. mocked DCSA carrier, CSV import, API); frontend 73
 
 ## Phase 4 — Predictive intelligence
-- [ ] Migration: model_versions, model_evaluations, eta_predictions, delay_predictions, risk_assessments
-- [ ] Point-in-time training dataset builders + dataset hashing
-- [ ] ETA baseline + LightGBM/XGBoost; time-based CV; metrics
-- [ ] Delay classifier with imbalance handling + calibration
-- [ ] Rule-based anomaly detection → alerts
-- [ ] Congestion forecasting baseline
-- [ ] MLflow tracking + model registry integration
-- [ ] Append-only prediction persistence + outcome back-fill + live evaluation
-- [ ] UI: `/predictions`
-- [ ] Tests: feature schemas, temporal separation, output validation, reproducibility
+- [x] Migration `0005`: model_versions, model_evaluations, eta/delay/congestion predictions, risk_assessments; append-only trigger (only outcome columns writable) — round-trip tested
+- [x] Time-based splits with a leakage assertion; dataset hashing; point-in-time delay features (`available_at`)
+- [x] ETA: distance ÷ speed baseline + quantile HistGradientBoosting (p10/p50/p90), promoted only if it beats the baseline; training-domain guard and censoring-aware fallback (ADR-013: HGB instead of LightGBM)
+- [x] Delay: logistic baseline vs isotonic-calibrated HGB, class-weighted; PR-AUC/Brier/ECE + calibration table — **no model in production: no real shipment arrivals yet**; synthetic training is opt-in, labeled, and scores only synthetic shipments
+- [x] Rule-based anomaly detection → `system_alerts` (stop, speed drop, AIS silence gated on feed continuity, long port wait, route deviation)
+- [x] Congestion: hourly observations (no backdating, warm-up excluded) + seasonal naive / persistence forecast; intervals only after 24 scored errors
+- [x] MLflow tracking (SQLite store) + `model_versions` registry; portable artifact URIs on a shared Docker volume
+- [x] Outcome back-fill + live evaluation (`ml.evaluate` hourly); Celery schedule for anomalies, predictions, congestion
+- [x] API: `/models`, `/predictions/{summary,eta,delay,congestion}`, `/vessels/{id}/eta`, `/shipments/{id}/delay-risk`, `/ports/{id}/congestion`, `/anomalies`
+- [x] UI: `/predictions` (registry, ETA, delay risk, congestion chart, anomalies), vessel ETA + anomaly cards, shipment delay-risk card, dashboard high-risk KPI
+- [x] Model cards: `docs/ml/`
+- [x] Tests: backend 251 (append-only trigger, leakage, domain/saturation fallbacks, synthetic guardrail, API provenance); frontend 83
+- [ ] Congestion gradient boosting on lags — *needs weeks of hourly history*
+- [ ] ETA beyond final approach — *needs longer AIS history (labels are right-censored at the ingest window)*
 
 ## Phase 5 — Quantitative research
 - [ ] Migration: research_datasets, maritime_features (hypertable), research_experiments, research_signals, backtest_runs, backtest_metrics

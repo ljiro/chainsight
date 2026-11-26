@@ -50,7 +50,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 
 ### Phase 4: Predictive intelligence
 - Training dataset builders with point-in-time joins, and dataset hashing.
-- ETA: great-circle/route-distance ÷ recent SOG baseline, then LightGBM, with time-based CV and MAE/MedAE/RMSE/within-6/12/24h.
+- ETA: great-circle distance ÷ recent SOG baseline, then quantile gradient boosting (scikit-learn HistGradientBoosting, ADR-013), with time-based splits and MAE/MedAE/RMSE/within-6/12/24h.
 - Delay classifier: logistic baseline → gradient boosting, with class weighting, calibration (isotonic), and PR-AUC.
 - Rule-based anomaly detection (stops, deviations, speed changes, AIS gaps, long waits) → `system_alerts`.
 - Congestion forecasting baseline (seasonal naive → gradient boosting on lags).
