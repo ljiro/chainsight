@@ -112,6 +112,19 @@ async def test_aisstream_subscribes_then_reconnects_after_errors() -> None:
     assert provider.reconnects == 2
 
 
+async def test_aisstream_uses_tolerant_connection_timeouts() -> None:
+    seen: dict[str, Any] = {}
+
+    @asynccontextmanager
+    async def connect(url: str, **kwargs: Any) -> AsyncIterator[FakeSocket]:
+        seen.update(kwargs)
+        yield FakeSocket([{"MessageType": "PositionReport", "n": 1}])
+
+    await take(AisStreamProvider("k", connect=connect, sleep=no_sleep).stream(), 1)
+    # The live service has been measured taking ~11.5 s to complete the handshake.
+    assert seen["open_timeout"] >= 30 and seen["ping_timeout"] >= 60 and seen["ping_interval"] >= 30
+
+
 async def test_aisstream_watchdog_reconnects_silent_socket() -> None:
     sockets = [FakeSocket([]), FakeSocket([{"MessageType": "PositionReport", "n": 1}])]
 

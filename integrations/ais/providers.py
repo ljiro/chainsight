@@ -89,6 +89,12 @@ class AisStreamProvider(AisProvider):
         *,
         url: str = AISSTREAM_URL,
         idle_timeout: float = 60.0,
+        # AISStream can take >10 s to complete the handshake and to answer pings under load;
+        # tight timeouts caused reconnect storms in production. The idle watchdog still
+        # catches dead sockets.
+        open_timeout: float = 30.0,
+        ping_interval: float = 30.0,
+        ping_timeout: float = 60.0,
         connect: Callable[..., Any] = ws_connect,
         backoff: Backoff | None = None,
         sleep: Sleep = asyncio.sleep,
@@ -101,6 +107,9 @@ class AisStreamProvider(AisProvider):
         self.message_types = list(message_types)
         self.url = url
         self.idle_timeout = idle_timeout
+        self.open_timeout = open_timeout
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
         self._connect = connect
         self.backoff = backoff or Backoff()
         self._sleep = sleep
@@ -118,7 +127,13 @@ class AisStreamProvider(AisProvider):
     async def stream(self) -> AsyncIterator[RawAisMessage]:
         while True:
             try:
-                async with self._connect(self.url, open_timeout=10, ping_interval=20) as ws:
+                async with self._connect(
+                    self.url,
+                    open_timeout=self.open_timeout,
+                    ping_interval=self.ping_interval,
+                    ping_timeout=self.ping_timeout,
+                    max_queue=4096,
+                ) as ws:
                     await ws.send(json.dumps(self.subscription()))
                     log.info("ais_connected", url=self.url, boxes=len(self.bounding_boxes))
                     while True:

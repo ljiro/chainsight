@@ -7,6 +7,7 @@ for a flush happen in one transaction; live updates are published only after com
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from collections import Counter, OrderedDict
 from collections.abc import Awaitable, Callable
@@ -78,6 +79,9 @@ class WindowStats:
     rejected: Counter[str] = field(default_factory=Counter)
     latency_ms_total: float = 0.0
     flush_errors: int = 0
+    flushes: int = 0
+    flush_seconds: float = 0.0
+    max_queue_depth: int = 0
     last_error: str | None = None
 
     @property
@@ -171,6 +175,17 @@ class AisPipeline:
         self._positions[key] = report
 
     async def flush(self) -> FlushResult:
+        started = time.perf_counter()
+        try:
+            return await self._flush()
+        finally:
+            self.window.flushes += 1
+            self.window.flush_seconds += time.perf_counter() - started
+
+    def observe_queue_depth(self, depth: int) -> None:
+        self.window.max_queue_depth = max(self.window.max_queue_depth, depth)
+
+    async def _flush(self) -> FlushResult:
         if self.source_id is None:
             raise RuntimeError("call start() before flush()")
         positions = sorted(self._positions.values(), key=lambda p: p.observed_at)
@@ -379,6 +394,9 @@ class AisPipeline:
                     "static_reports": w.statics,
                     "imo_conflicts": w.imo_conflicts,
                     "port_events": w.port_events,
+                    "flushes": w.flushes,
+                    "flush_seconds": round(w.flush_seconds, 3),
+                    "max_queue_depth": w.max_queue_depth,
                 },
             )
             await session.execute(
@@ -410,5 +428,8 @@ class AisPipeline:
             duplicates=w.duplicates,
             rejected=dict(w.rejected),
             port_events=w.port_events,
+            flushes=w.flushes,
+            flush_s=round(w.flush_seconds, 2),
+            max_queue=w.max_queue_depth,
         )
         return log_id

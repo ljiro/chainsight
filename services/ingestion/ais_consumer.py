@@ -108,6 +108,7 @@ async def run(settings: Settings, stop: asyncio.Event) -> None:
                         finished = True
                         break
                     pipeline.ingest(nxt)
+            pipeline.observe_queue_depth(queue.qsize())
             if pipeline.buffered:
                 await pipeline.flush()
             if pipeline.window_due():
