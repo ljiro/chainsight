@@ -62,7 +62,7 @@ export function FleetFilters({
         <select
           value={value.carrier ?? ""}
           onChange={(e) => onChange({ ...value, carrier: e.target.value || null })}
-          className="h-8 rounded-md border bg-card px-2 text-sm text-foreground"
+          className="h-8 w-40 rounded-md border bg-card px-2 text-sm text-foreground"
         >
           <option value="">All</option>
           {carriers.map((c) => (

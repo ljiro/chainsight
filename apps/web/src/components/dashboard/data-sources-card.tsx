@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/query-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDataSources } from "@/lib/queries";
-import { formatAge } from "@/lib/utils";
+import { formatAge, humanize } from "@/lib/utils";
 
 export function DataSourcesCard() {
   const { data, error, isPending, refetch } = useDataSources();
@@ -47,7 +47,7 @@ export function DataSourcesCard() {
                       ) : (
                         <span className="font-medium">{s.name}</span>
                       )}
-                      <p className="text-xs text-muted-foreground capitalize">{s.category}</p>
+                      <p className="text-xs text-muted-foreground">{s.category === "ais" ? "AIS" : humanize(s.category)}</p>
                     </td>
                     <td className="py-2.5 pr-3">
                       <StatusBadge kind="source" value={s.status} />

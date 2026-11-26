@@ -11,20 +11,18 @@ import type { Alert } from "@/lib/types";
 import { formatAge, humanize } from "@/lib/utils";
 
 export function MonitoredVesselsKpi() {
-  const { data, error } = useFleetSummary();
+  const { data, error, isPending } = useFleetSummary();
   const synthetic = (data?.by_data_mode.synthetic ?? 0) > 0;
   return (
-    <div className="relative">
-      <KpiCard
-        label="Monitored vessels"
-        value={data && data.vessels_total > 0 ? data.vessels_recent : null}
-        icon={Ship}
-        unavailableReason={error ? "Fleet data unavailable" : "No AIS data yet: start the AIS consumer"}
-      />
-      {synthetic ? (
-        <Badge tone="synthetic" className="absolute right-3 bottom-3">Synthetic</Badge>
-      ) : null}
-    </div>
+    <KpiCard
+      label="Monitored vessels"
+      value={data && data.vessels_total > 0 ? data.vessels_recent : null}
+      icon={Ship}
+      unavailableReason={
+        isPending ? "Loading…" : error ? "Fleet data unavailable" : "No AIS data yet: start the AIS consumer"
+      }
+      tag={synthetic ? <Badge tone="synthetic">Synthetic</Badge> : null}
+    />
   );
 }
 

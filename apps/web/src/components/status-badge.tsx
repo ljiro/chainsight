@@ -37,7 +37,7 @@ const FRESHNESS: Record<Freshness, Spec> = {
   fresh: { label: "Fresh", tone: "success" },
   stale: { label: "Stale", tone: "warning" },
   never: { label: "No data yet", tone: "neutral" },
-  unknown: { label: "Unknown", tone: "neutral" },
+  unknown: { label: "No schedule", tone: "neutral" },
 };
 
 const POSITION: Record<PositionFreshness, Spec> = {

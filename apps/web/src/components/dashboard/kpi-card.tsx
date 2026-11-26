@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 
 /**
@@ -10,11 +11,13 @@ export function KpiCard({
   value,
   icon: Icon,
   unavailableReason,
+  tag,
 }: {
   label: string;
   value: number | null;
   icon: LucideIcon;
   unavailableReason: string;
+  tag?: ReactNode;
 }) {
   return (
     <Card className="p-4">
@@ -30,7 +33,10 @@ export function KpiCard({
           <p className="mt-1 text-[11px] text-muted-foreground">{unavailableReason}</p>
         </>
       ) : (
-        <p className="mt-2 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
+          {tag}
+        </div>
       )}
     </Card>
   );
