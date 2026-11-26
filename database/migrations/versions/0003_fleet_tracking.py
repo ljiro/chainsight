@@ -384,7 +384,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM data_sources WHERE key IN ('ais-simulator', 'ais-replay', 'un-locode')")
     for table in (
         "weather_observations",
         "port_observations",
@@ -399,3 +398,14 @@ def downgrade() -> None:
         "vessels",
     ):
         op.drop_table(table)
+    # Delete the seeded sources only after the tables referencing them are gone; their
+    # ingestion logs describe data that no longer exists after this downgrade.
+    op.execute(
+        "DELETE FROM ingestion_logs WHERE data_source_id IN (SELECT id FROM data_sources "
+        "WHERE key IN ('ais-simulator', 'ais-replay', 'un-locode'))"
+    )
+    # Imported registry ports would otherwise lose their provenance; they are re-importable.
+    op.execute(
+        "DELETE FROM ports WHERE source_id IN (SELECT id FROM data_sources WHERE key = 'un-locode')"
+    )
+    op.execute("DELETE FROM data_sources WHERE key IN ('ais-simulator', 'ais-replay', 'un-locode')")
