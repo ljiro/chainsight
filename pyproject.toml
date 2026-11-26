@@ -18,6 +18,8 @@ dependencies = [
   "celery[redis]>=5.4,<6",
   "structlog>=24.4",
   "httpx>=0.28,<1",
+  "websockets>=13",
+  "pyproj>=3.7",
 ]
 
 [dependency-groups]
@@ -65,7 +67,7 @@ ignore = ["S101"]  # asserts are fine in tests
 known-first-party = ["core", "database", "integrations", "services", "ml", "chainsight_api"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "DTZ"]
+"tests/**" = ["S", "DTZ", "E501"]
 "database/migrations/**" = ["E501"]
 
 [tool.mypy]
