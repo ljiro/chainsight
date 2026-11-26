@@ -19,6 +19,13 @@ from database.models.port_activity import (
     PortObservation,
     WeatherObservation,
 )
+from database.models.shipments import (
+    Container,
+    Shipment,
+    ShipmentEvent,
+    ShipmentItem,
+    ShipmentVessel,
+)
 from database.models.sources import DataSource, IngestionLog
 
 __all__ = [
@@ -27,6 +34,7 @@ __all__ = [
     "Carrier",
     "CarrierIntegration",
     "CarrierIntegrationLog",
+    "Container",
     "DataSource",
     "IngestionLog",
     "MaritimeRoute",
@@ -35,6 +43,10 @@ __all__ = [
     "Port",
     "PortArea",
     "PortObservation",
+    "Shipment",
+    "ShipmentEvent",
+    "ShipmentItem",
+    "ShipmentVessel",
     "SystemAlert",
     "User",
     "Vessel",

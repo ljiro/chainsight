@@ -30,7 +30,7 @@ def test_list_data_sources(client: TestClient) -> None:
     r = client.get("/api/v1/data-sources")
     assert r.status_code == 200
     body = r.json()
-    assert body["total"] == 7
+    assert body["total"] == 9
     ais = next(i for i in body["items"] if i["key"] == "aisstream")
     assert ais["data_mode"] == "real_time"
     assert ais["status"] == "not_configured"
@@ -47,10 +47,10 @@ def test_list_carriers_with_integration_status(client: TestClient) -> None:
     r = client.get("/api/v1/carriers")
     assert r.status_code == 200
     body = r.json()
-    assert body["total"] == 8
+    assert body["total"] == 9
     names = [c["name"] for c in body["items"]]
     assert names == sorted(names)
-    for c in body["items"]:
+    for c in [c for c in body["items"] if c["code"] != "demo"]:
         assert c["integrations"] == [
             {
                 "capability": "shipment_tracking",
@@ -68,7 +68,7 @@ def test_carriers_filter_sort_and_paginate(client: TestClient) -> None:
 
     r = client.get("/api/v1/carriers", params={"sort": "-code", "limit": 2, "offset": 1})
     body = r.json()
-    assert body["total"] == 8 and body["limit"] == 2 and body["offset"] == 1
+    assert body["total"] == 9 and body["limit"] == 2 and body["offset"] == 1
     assert [c["code"] for c in body["items"]] == ["msc", "maersk"]
 
 

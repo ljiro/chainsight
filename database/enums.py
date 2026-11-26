@@ -132,3 +132,44 @@ class WeatherKind(StrEnum):
     CURRENT = "current"
     FORECAST = "forecast"
     HISTORICAL = "historical"
+
+
+class ReferenceType(StrEnum):
+    CONTAINER = "container"
+    BOOKING = "booking"
+    BILL_OF_LADING = "bill_of_lading"
+
+
+class ShipmentStatus(StrEnum):
+    """Derived from ACTUAL events only; never from estimates."""
+
+    UNKNOWN = "unknown"
+    PLANNED = "planned"
+    AT_ORIGIN = "at_origin"
+    LOADED = "loaded"
+    IN_TRANSIT = "in_transit"
+    TRANSSHIPMENT = "transshipment"
+    DISCHARGED = "discharged"
+    DELIVERED = "delivered"
+
+
+class DelayStatus(StrEnum):
+    UNKNOWN = "unknown"
+    ON_TIME = "on_time"
+    DELAYED = "delayed"
+    ARRIVED_ON_TIME = "arrived_on_time"
+    ARRIVED_LATE = "arrived_late"
+
+
+class ShipmentEventType(StrEnum):
+    EQUIPMENT = "equipment"
+    TRANSPORT = "transport"
+    SHIPMENT = "shipment"
+
+
+class EventClassifier(StrEnum):
+    """DCSA eventClassifierCode: PLN / EST / ACT."""
+
+    PLANNED = "PLANNED"
+    ESTIMATED = "ESTIMATED"
+    ACTUAL = "ACTUAL"

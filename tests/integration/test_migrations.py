@@ -66,11 +66,22 @@ def test_reference_data_seeded(migrated_db: Engine) -> None:
         sources = conn.execute(sa.text("SELECT key, status, data_mode FROM data_sources")).all()
 
     codes = {c.code for c in carriers}
-    assert codes == {"maersk", "msc", "cma-cgm", "hapag-lloyd", "cosco", "evergreen", "one", "dhl"}
-    # No adapters exist yet, so nothing may claim to be connected.
-    assert {(i.capability, i.status) for i in integrations} == {
-        ("shipment_tracking", "unavailable")
+    assert codes == {
+        "maersk",
+        "msc",
+        "cma-cgm",
+        "hapag-lloyd",
+        "cosco",
+        "evergreen",
+        "one",
+        "dhl",
+        "demo",
     }
+    # Freshly migrated, nothing may claim to be connected: real carriers are unavailable
+    # and only the demo carrier is demo_data_only.
+    statuses = {i.code: i.status for i in integrations}
+    assert statuses.pop("demo") == "demo_data_only"
+    assert set(statuses.values()) == {"unavailable"}
     assert len(integrations) == len(codes)
     assert {s.key for s in sources} == {
         "aisstream",
@@ -80,6 +91,8 @@ def test_reference_data_seeded(migrated_db: Engine) -> None:
         "ais-simulator",
         "ais-replay",
         "un-locode",
+        "carrier-demo",
+        "csv-import",
     }
     assert {s.status for s in sources} == {"not_configured"}
 
