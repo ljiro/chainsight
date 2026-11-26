@@ -12,6 +12,17 @@
   11,800 ports.
 - **Precision:** coordinates are given to the minute (about 1.85 km), and sometimes mark
   the city rather than the terminal.
+- **Coverage gaps:** about a third of UN/LOCODE port entries have **no coordinates** and
+  cannot be geofenced. In the Philippines it is 271 of 377 (72%), including the Manila port
+  codes (PHMNL, PHMNN North Harbour, PHMNS South Harbour). Port-call detection there is
+  therefore incomplete until a registry with coordinates (e.g. the NGA World Port Index)
+  is loaded.
+- **Exclusions:** `EXCLUDED_CODES` in `integrations/ports/unlocode.py` lists entries that
+  carry the port flag but are not ports. Each entry gives its reason. The first is
+  `PHPIS` ("Philippines", a country-level placeholder in central Manila).
+- **Pruning:** `--prune` removes ports that are no longer in the registry. Use it only
+  with a complete registry file. Ports that are still referenced (calls, voyages,
+  weather) are kept and reported.
 - **Geofences:** a circular buffer around each port (`PORT_GEOFENCE_RADIUS_M`, default
   8 km), stored in `port_areas` with `method = circle_buffer`. Curated polygons can be
   added later with `method = polygon`.
@@ -22,9 +33,10 @@ docker compose run --rm migrate               # Compose: imports only if the reg
 uv run python -m services.ingestion.port_registry --file code-list.csv --radius-m 6000
 ```
 
-The NGA World Port Index (public domain) was the first choice, but its download endpoint
-refused automated requests during development. It remains a good candidate for a
-second registry source.
+The NGA World Port Index (public domain) has much better coordinate coverage, but its
+download endpoint refuses automated requests, and ChainSight does not work around
+that. To use it, download the CSV manually from <https://msi.nga.mil> (Publications →
+World Port Index) in a browser. An importer for that file is planned.
 
 ### Port-call detection
 

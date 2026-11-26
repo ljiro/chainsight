@@ -123,3 +123,21 @@ def test_weather_failure_is_graceful_and_recorded(migrated_db: Engine) -> None:
         "SELECT l.status FROM ingestion_logs l JOIN data_sources d ON d.id = l.data_source_id WHERE d.key = 'open-meteo' ORDER BY l.started_at DESC LIMIT 1",
     )[0]
     assert log.status == "failed"
+
+
+def test_port_import_prune_is_opt_in_and_keeps_referenced(migrated_db: Engine) -> None:
+    two = CSV + ",ZY,OLD,Old Port,Old Port,,AI,1-------,2401,,5100N 00100W,\n"
+    import_ports(migrated_db, iter_seaports(io.StringIO(two)), radius_m=5000)
+    # A partial import without --prune never deletes anything.
+    import_ports(migrated_db, iter_seaports(io.StringIO(CSV)), radius_m=5000)
+    assert q(migrated_db, "SELECT count(*) AS n FROM ports WHERE unlocode = 'ZYOLD'")[0].n == 1
+    # With prune, the unreferenced stale port goes; ports referenced elsewhere are kept and reported.
+    result = import_ports(migrated_db, iter_seaports(io.StringIO(CSV)), radius_m=5000, prune=True)
+    assert q(migrated_db, "SELECT count(*) AS n FROM ports WHERE unlocode = 'ZYOLD'")[0].n == 0
+    assert result.removed >= 1
+    still = q(
+        migrated_db,
+        "SELECT count(*) AS n FROM ports p WHERE p.unlocode IN (SELECT unnest(CAST(:c AS text[])))",
+        c=list(result.stale_referenced),
+    )[0].n
+    assert still == len(result.stale_referenced)  # referenced ports survive pruning

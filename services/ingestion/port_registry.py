@@ -51,6 +51,20 @@ _UPSERT = sa.text(
         updated_at = now()
     """
 )
+# Ports this source no longer lists. Unreferenced ones are removed; referenced ones are
+# kept (calls/voyages point at them) and reported so an operator can decide.
+_DELETE_STALE = sa.text(
+    """
+    DELETE FROM ports p WHERE p.source_id = :source_id AND NOT (p.unlocode = ANY(:codes))
+      AND NOT EXISTS (SELECT 1 FROM voyage_port_calls c WHERE c.port_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM voyages v WHERE p.id IN (v.origin_port_id, v.destination_port_id))
+      AND NOT EXISTS (SELECT 1 FROM maritime_routes r WHERE p.id IN (r.origin_port_id, r.destination_port_id))
+      AND NOT EXISTS (SELECT 1 FROM weather_observations w WHERE w.port_id = p.id)
+    """
+)
+_STALE_REFERENCED = sa.text(
+    "SELECT unlocode FROM ports WHERE source_id = :source_id AND NOT (unlocode = ANY(:codes))"
+)
 _DELETE_AREAS = sa.text(
     "DELETE FROM port_areas WHERE method = 'circle_buffer' "
     "AND port_id IN (SELECT id FROM ports WHERE source_id = :source_id)"
@@ -66,6 +80,8 @@ _INSERT_AREAS = sa.text(
 class ImportResult:
     ports: int
     areas: int
+    removed: int = 0
+    stale_referenced: tuple[str, ...] = ()
 
 
 def _chunks(records: Iterable[PortRecord], size: int) -> Iterator[list[PortRecord]]:
@@ -74,7 +90,14 @@ def _chunks(records: Iterable[PortRecord], size: int) -> Iterator[list[PortRecor
         yield chunk
 
 
-def import_ports(engine: Engine, records: Iterable[PortRecord], *, radius_m: int) -> ImportResult:
+def import_ports(
+    engine: Engine, records: Iterable[PortRecord], *, radius_m: int, prune: bool = False
+) -> ImportResult:
+    """Upsert ports and rebuild geofences.
+
+    With `prune=True` (full-registry imports only), ports of this source that are absent
+    from `records` are deleted when nothing references them; referenced ones are reported.
+    """
     started = utcnow()
     seen: set[str] = set()
     with engine.begin() as conn:
@@ -99,6 +122,21 @@ def import_ports(engine: Engine, records: Iterable[PortRecord], *, radius_m: int
             if rows:
                 conn.execute(_UPSERT, {"rows": json.dumps(rows), "source_id": source_id})
                 total += len(rows)
+        removed = 0
+        stale: list[str] = []
+        if prune and seen:
+            params = {"source_id": source_id, "codes": sorted(seen)}
+            conn.execute(
+                sa.text(
+                    "DELETE FROM port_areas WHERE port_id IN (SELECT id FROM ports "
+                    "WHERE source_id = :source_id AND NOT (unlocode = ANY(:codes)))"
+                ),
+                params,
+            )
+            removed = conn.execute(_DELETE_STALE, params).rowcount
+            stale = [r.unlocode for r in conn.execute(_STALE_REFERENCED, params)]
+            if stale:
+                log.warning("port_registry_stale_referenced", ports=stale)
         conn.execute(_DELETE_AREAS, {"source_id": source_id})
         areas = conn.execute(_INSERT_AREAS, {"source_id": source_id, "radius": radius_m}).rowcount
         write_log_sync(
@@ -108,11 +146,16 @@ def import_ports(engine: Engine, records: Iterable[PortRecord], *, radius_m: int
             status="succeeded",
             received=total,
             accepted=total,
-            details={"geofence_radius_m": radius_m, "areas": areas},
+            details={
+                "geofence_radius_m": radius_m,
+                "areas": areas,
+                "removed_stale_ports": removed,
+                "stale_ports_still_referenced": stale,
+            },
         )
         mark_success_sync(conn, source_id)
     log.info("port_registry_imported", ports=total, areas=areas, radius_m=radius_m)
-    return ImportResult(ports=total, areas=areas)
+    return ImportResult(ports=total, areas=areas, removed=removed, stale_referenced=tuple(stale))
 
 
 def download(url: str, dest: Path) -> Path:
@@ -133,6 +176,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file", type=Path, help="local UN/LOCODE code-list CSV")
     parser.add_argument("--url", default=settings.un_locode_url)
     parser.add_argument("--radius-m", type=int, default=settings.port_geofence_radius_m)
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="remove ports no longer in the registry (only with a complete registry file)",
+    )
     parser.add_argument(
         "--if-empty",
         action="store_true",
@@ -155,14 +203,23 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             path = args.file or download(args.url, Path(tmp) / "code-list.csv")
             with path.open(encoding="utf-8", newline="") as fh:
-                result = import_ports(engine, iter_seaports(fh), radius_m=args.radius_m)
+                result = import_ports(
+                    engine, iter_seaports(fh), radius_m=args.radius_m, prune=args.prune
+                )
     except (httpx.HTTPError, OSError) as exc:
         if not args.if_empty:
             raise
         # Startup must not depend on a third-party download; port calls simply stay off.
         log.warning("port_registry_import_skipped", error=f"{type(exc).__name__}: {exc}")
         return 0
-    print(f"Imported {result.ports} ports, {result.areas} geofences")
+    print(
+        f"Imported {result.ports} ports, {result.areas} geofences; removed {result.removed} stale"
+        + (
+            f"; still referenced: {', '.join(result.stale_referenced)}"
+            if result.stale_referenced
+            else ""
+        )
+    )
     return 0
 
 

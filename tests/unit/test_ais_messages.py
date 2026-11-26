@@ -166,3 +166,19 @@ def test_clean_text() -> None:
     assert clean_text("  ever   given@@@ ", 64) == "EVER GIVEN"
     assert clean_text("@@@@", 64) is None
     assert clean_text(42, 64) is None
+
+
+def test_unlocode_parser_skips_excluded_and_coordinate_less_entries() -> None:
+    import io
+
+    from integrations.ports.unlocode import EXCLUDED_CODES, iter_seaports
+
+    csv_text = (
+        "Change,Country,Location,Name,NameWoDiacritics,Subdivision,Status,Function,Date,IATA,Coordinates,Remarks\n"
+        ",PH,PIS,Philippines,Philippines,,RL,1-------,1207,,1435N 12100E,\n"
+        ",PH,MNL,Manila,Manila,,AI,1--45---,9601,,,\n"
+        ",PH,BTG,Batangas,Batangas,,AI,1-------,0401,,1345N 12103E,\n"
+    )
+    codes = [p.unlocode for p in iter_seaports(io.StringIO(csv_text))]
+    assert codes == ["PHBTG"]
+    assert EXCLUDED_CODES.get("PHPIS")
