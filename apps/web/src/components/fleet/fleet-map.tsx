@@ -295,7 +295,13 @@ export function FleetMap({
     // `relative` is only a default: tailwind-merge lets a caller's `absolute inset-0` win.
     // (An inline position style here once overrode it and collapsed the map to 0 px.)
     <div className={cn("relative", className)}>
-      <div ref={container} className="absolute inset-0" data-testid="fleet-map" />
+      {/* Inline style on purpose: maplibre-gl.css sets `.maplibregl-map { position: relative }`
+          on this element, which overrode an `absolute inset-0` class and collapsed it to 0 px. */}
+      <div
+        ref={container}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        data-testid="fleet-map"
+      />
       {failed ? (
         <div role="status" className="absolute bottom-2 left-2 rounded bg-card/90 px-2 py-1 text-xs text-muted-foreground">
           {failed}

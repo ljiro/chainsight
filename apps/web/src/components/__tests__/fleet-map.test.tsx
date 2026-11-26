@@ -15,6 +15,17 @@ describe("FleetMap layout", () => {
     expect(wrapper.style.position).toBe("");
   });
 
+  it("sizes the MapLibre container inline so maplibre-gl.css cannot collapse it", async () => {
+    const { FleetMap } = await import("@/components/fleet/fleet-map");
+    render(<FleetMap className="absolute inset-0" vessels={[]} />);
+    const el = screen.getByTestId("fleet-map");
+    // maplibre-gl.css adds `.maplibregl-map { position: relative }` to this element; only an
+    // inline style outranks that class rule.
+    expect(el.style.position).toBe("absolute");
+    expect(el.style.width).toBe("100%");
+    expect(el.style.height).toBe("100%");
+  });
+
   it("defaults to relative positioning when given an explicit size", async () => {
     const { FleetMap } = await import("@/components/fleet/fleet-map");
     render(<FleetMap className="h-80" vessels={[]} />);
