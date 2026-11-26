@@ -36,3 +36,8 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local ML artifacts and tracking database (rebuilt by training; never committed)
+data/models/
+data/mlflow.db
+mlflow.db
