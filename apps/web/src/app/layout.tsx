@@ -1,11 +1,12 @@
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-face" });
+// Fonts are self-hosted from npm (@fontsource-variable/*): builds need no network access
+// and visitors' browsers never contact a third-party font CDN.
 
 export const metadata: Metadata = {
   title: { default: "ChainSight", template: "%s · ChainSight" },
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${mono.variable} font-sans`}>
+      <body className="font-sans">
         <Providers>{children}</Providers>
       </body>
     </html>
