@@ -30,7 +30,7 @@ def test_list_data_sources(client: TestClient) -> None:
     r = client.get("/api/v1/data-sources")
     assert r.status_code == 200
     body = r.json()
-    assert body["total"] == 9
+    assert body["total"] == 10
     ais = next(i for i in body["items"] if i["key"] == "aisstream")
     assert ais["data_mode"] == "real_time"
     assert ais["status"] == "not_configured"

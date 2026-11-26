@@ -93,6 +93,7 @@ def test_reference_data_seeded(migrated_db: Engine) -> None:
         "un-locode",
         "carrier-demo",
         "csv-import",
+        "fred",
     }
     assert {s.status for s in sources} == {"not_configured"}
 

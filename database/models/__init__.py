@@ -27,6 +27,16 @@ from database.models.port_activity import (
     PortObservation,
     WeatherObservation,
 )
+from database.models.research import (
+    BacktestMetric,
+    BacktestRun,
+    IndicatorObservation,
+    IndicatorSeries,
+    MaritimeFeature,
+    ResearchDataset,
+    ResearchExperiment,
+    ResearchSignal,
+)
 from database.models.shipments import (
     Container,
     Shipment,
@@ -39,6 +49,8 @@ from database.models.sources import DataSource, IngestionLog
 __all__ = [
     "ApiKey",
     "AuditLog",
+    "BacktestMetric",
+    "BacktestRun",
     "Carrier",
     "CarrierIntegration",
     "CarrierIntegrationLog",
@@ -47,7 +59,10 @@ __all__ = [
     "DataSource",
     "DelayPrediction",
     "EtaPrediction",
+    "IndicatorObservation",
+    "IndicatorSeries",
     "IngestionLog",
+    "MaritimeFeature",
     "MaritimeRoute",
     "ModelEvaluation",
     "ModelVersion",
@@ -56,6 +71,9 @@ __all__ = [
     "Port",
     "PortArea",
     "PortObservation",
+    "ResearchDataset",
+    "ResearchExperiment",
+    "ResearchSignal",
     "RiskAssessment",
     "Shipment",
     "ShipmentEvent",

@@ -13,6 +13,8 @@ ENVIRONMENT_INDEXES = frozenset(
         "vessel_positions_observed_at_idx",
         "port_observations_observed_at_idx",
         "ix_vessel_positions_observed_at",
+        "indicator_observations_as_of_idx",
+        "maritime_features_as_of_idx",
     }
 )
 
