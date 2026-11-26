@@ -133,12 +133,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file", type=Path, help="local UN/LOCODE code-list CSV")
     parser.add_argument("--url", default=settings.un_locode_url)
     parser.add_argument("--radius-m", type=int, default=settings.port_geofence_radius_m)
+    parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="skip if the registry is already imported; never fail (used at stack startup)",
+    )
     args = parser.parse_args(argv)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        path = args.file or download(args.url, Path(tmp) / "code-list.csv")
-        with path.open(encoding="utf-8", newline="") as fh:
-            result = import_ports(get_sync_engine(), iter_seaports(fh), radius_m=args.radius_m)
+    engine = get_sync_engine()
+    if args.if_empty:
+        with engine.connect() as conn:
+            source_id, _ = source_info_sync(conn, SOURCE_KEY)
+            existing = conn.execute(
+                sa.text("SELECT count(*) FROM ports WHERE source_id = :s"), {"s": source_id}
+            ).scalar_one()
+        if existing:
+            print(f"Port registry already imported ({existing} ports); skipping")
+            return 0
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = args.file or download(args.url, Path(tmp) / "code-list.csv")
+            with path.open(encoding="utf-8", newline="") as fh:
+                result = import_ports(engine, iter_seaports(fh), radius_m=args.radius_m)
+    except (httpx.HTTPError, OSError) as exc:
+        if not args.if_empty:
+            raise
+        # Startup must not depend on a third-party download; port calls simply stay off.
+        log.warning("port_registry_import_skipped", error=f"{type(exc).__name__}: {exc}")
+        return 0
     print(f"Imported {result.ports} ports, {result.areas} geofences")
     return 0
 

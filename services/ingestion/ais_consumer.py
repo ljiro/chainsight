@@ -137,6 +137,9 @@ def main() -> int:
             loop.add_signal_handler(sig, stop.set)
         await run(settings, stop)
 
+    if settings.ais_provider is AisProviderSetting.DISABLED:
+        log.info("ais_consumer_disabled", hint="set AIS_PROVIDER to simulator, aisstream or replay")
+        return 0
     try:
         asyncio.run(_main())
     except ProviderNotConfigured as exc:

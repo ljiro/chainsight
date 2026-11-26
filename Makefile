@@ -30,6 +30,10 @@ api: ## Run the API with reload
 	uv run uvicorn chainsight_api.main:app --reload --port 8000
 worker: ## Run a Celery worker
 	uv run celery -A services.worker.app worker -l INFO -Q default,ingest,ml
+ports: ## Import the UN/LOCODE port registry (downloads ~7 MB)
+	uv run python -m services.ingestion.port_registry
+ais: ## Run the AIS consumer (AIS_PROVIDER=simulator|aisstream|replay)
+	uv run python -m services.ingestion.ais_consumer
 web: ## Run the Next.js dev server
 	cd apps/web && npm run dev
 
@@ -39,11 +43,11 @@ lint: ## Lint backend and frontend
 	uv run ruff format --check .
 	cd apps/web && npm run lint && npm run typecheck
 typecheck: ## Static type checks (backend)
-	uv run mypy core database apps/api/chainsight_api services
+	uv run mypy core database integrations apps/api/chainsight_api services
 test: ## Run all tests (integration tests need TEST_DATABASE_URL)
 	uv run pytest
 	cd apps/web && npm test
 test-unit: ## Backend unit tests only
 	uv run pytest tests/unit
 
-.PHONY: help up down logs infra install migrate api worker web lint typecheck test test-unit
+.PHONY: help up down logs infra install migrate ports ais api worker web lint typecheck test test-unit
