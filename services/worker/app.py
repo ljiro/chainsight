@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import setup_logging
 
 from core.logging_config import configure_logging
@@ -39,6 +40,8 @@ def create_celery() -> Celery:
         broker_connection_retry_on_startup=True,
         beat_schedule={
             "system-heartbeat": {"task": "system.heartbeat", "schedule": 60.0},
+            "data-freshness": {"task": "ingest.check_freshness", "schedule": 60.0},
+            "port-weather": {"task": "ingest.weather.ports", "schedule": crontab(minute=5)},
         },
     )
     app.autodiscover_tasks(["services.worker"], related_name="tasks", force=True)
