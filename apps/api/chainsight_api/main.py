@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from chainsight_api.errors import install_error_handlers
 from chainsight_api.health import close_redis
 from chainsight_api.middleware import install_middleware
-from chainsight_api.routers import catalog, health
+from chainsight_api.routers import catalog, fleet, health, live
 from chainsight_api.schemas.common import ErrorResponse
 from core.logging_config import configure_logging, get_logger
 from core.settings import Settings, get_settings
@@ -67,6 +67,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     v1 = APIRouter(prefix=API_V1_PREFIX)
     v1.include_router(health.router)
     v1.include_router(catalog.router)
+    v1.include_router(fleet.router)
+    v1.include_router(live.router)
     app.include_router(v1)
     return app
 
