@@ -123,3 +123,18 @@ it("counts data modes", () => {
 it("reconnect delay grows and caps", () => {
   expect([0, 1, 2, 10].map(reconnectDelay)).toEqual([1000, 2000, 4000, 30000]);
 });
+
+describe("regions", async () => {
+  const { inBBox, regionById } = await import("@/lib/regions");
+  it("looks up presets and falls back to world", () => {
+    expect(regionById("ph").label).toBe("Philippines");
+    expect(regionById("nope").id).toBe("world");
+    expect(regionById(null).id).toBe("world");
+  });
+  it("tests membership, including antimeridian boxes", () => {
+    expect(inBBox(120.97, 14.6, regionById("ph").bbox)).toBe(true); // Manila
+    expect(inBBox(103.85, 1.28, regionById("ph").bbox)).toBe(false); // Singapore
+    expect(inBBox(179, 0, [170, -10, -170, 10])).toBe(true);
+    expect(inBBox(0, 0, [170, -10, -170, 10])).toBe(false);
+  });
+});

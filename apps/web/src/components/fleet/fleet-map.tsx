@@ -27,6 +27,8 @@ export interface FleetMapProps {
   track?: TrackResponse | null;
   selectedId?: string | null;
   focus?: { lon: number; lat: number; zoom?: number; key: string } | null;
+  /** Fit the view to a bounding box [w, s, e, n]; change `key` to re-apply. */
+  fitTo?: { bbox: [number, number, number, number]; key: string } | null;
   onSelect?: (id: string | null) => void;
   onViewportChange?: (v: Viewport) => void;
   initialView?: { center: [number, number]; zoom: number };
@@ -139,6 +141,7 @@ export function FleetMap({
   onSelect,
   onViewportChange,
   initialView = { center: [40, 20], zoom: 1.6 },
+  fitTo,
   className,
 }: FleetMapProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -151,6 +154,8 @@ export function FleetMap({
   const { resolvedTheme } = useTheme();
   const mode: Mode = resolvedTheme === "dark" ? "dark" : "light";
   const modeRef = useRef(mode);
+  const fitRef = useRef(fitTo);
+  fitRef.current = fitTo;
 
   // Create the map once.
   useEffect(() => {
@@ -192,7 +197,15 @@ export function FleetMap({
           });
         };
         map.on("moveend", emitViewport);
-        map.on("load", emitViewport);
+        map.on("load", () => {
+          // Apply a region requested before the map finished loading (e.g. from the URL).
+          const fit = fitRef.current;
+          if (fit) {
+            const [w, s, e, n] = fit.bbox;
+            map!.fitBounds([[w, s], [e, n]], { padding: 24, duration: 0 });
+          }
+          emitViewport();
+        });
 
         map.on("click", "vessels", (e: MapLayerMouseEvent) => {
           const id = e.features?.[0]?.properties?.id as string | undefined;
@@ -266,6 +279,14 @@ export function FleetMap({
       mapRef.current.easeTo({ center: [focus.lon, focus.lat], zoom: Math.max(mapRef.current.getZoom(), focus.zoom ?? 6) });
     }
   }, [focus?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (fitTo && map?.loaded()) {
+      const [w, s, e, n] = fitTo.bbox;
+      map.fitBounds([[w, s], [e, n]], { padding: 24, duration: 800 });
+    }
+  }, [fitTo?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={className} style={{ position: "relative" }}>

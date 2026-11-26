@@ -18,6 +18,12 @@ vi.mock("@/components/fleet/fleet-map", () => ({
   },
 }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
+const nav = vi.hoisted(() => ({ search: "", replace: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: nav.replace }),
+  usePathname: () => "/fleet",
+  useSearchParams: () => new URLSearchParams(nav.search),
+}));
 
 class FakeSocket {
   static instances: FakeSocket[] = [];
@@ -91,18 +97,55 @@ describe("FleetView", () => {
   beforeEach(() => {
     FakeSocket.instances = [];
     vi.stubGlobal("WebSocket", FakeSocket);
+    nav.search = "";
+    nav.replace.mockReset();
   });
 
-  async function renderView() {
+  async function renderView(waitFor = "SYNTHETIC AEX 01") {
     const { FleetView } = await import("@/components/fleet/fleet-view");
     mockFetch((path) => {
       if (path === "/api/v1/fleet/positions") return { body: positions() };
       if (path === "/api/v1/carriers") return { body: { items: [], total: 0, limit: 200, offset: 0 } };
+      if (path === "/api/v1/ports") {
+        return { body: [{ id: "p1", unlocode: "PHMNL", name: "Manila", country_code: "PH", lat: 14.6, lon: 120.97,
+                          geofence_radius_m: 8000, vessels_in_port: 2 }] };
+      } // prettier-ignore
       return "pending";
     });
     renderWithQuery(<FleetView />);
-    await screen.findByText("SYNTHETIC AEX 01");
+    await screen.findByText(waitFor);
   }
+
+  it("region from the URL narrows vessels and warns about thin coverage", async () => {
+    // Move one vessel into Philippine waters for this test.
+    nav.search = "region=ph";
+    const { FleetView } = await import("@/components/fleet/fleet-view");
+    const data = positions();
+    data.features[1]!.geometry.coordinates = [121.0, 14.5];
+    mockFetch((path) => {
+      if (path === "/api/v1/fleet/positions") return { body: data };
+      if (path === "/api/v1/ports") {
+        return { body: [{ id: "p1", unlocode: "PHMNL", name: "Manila", country_code: "PH", lat: 14.6, lon: 120.97,
+                          geofence_radius_m: 8000, vessels_in_port: 2 }] };
+      } // prettier-ignore
+      if (path === "/api/v1/carriers") return { body: { items: [], total: 0, limit: 200, offset: 0 } };
+      return "pending";
+    });
+    renderWithQuery(<FleetView />);
+    const list = await screen.findByRole("region", { name: "Vessels in Philippines" });
+    expect(await within(list).findByText("SYNTHETIC MEG 17")).toBeInTheDocument();
+    expect(within(list).queryByText("SYNTHETIC AEX 01")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fleet-map")).toHaveAttribute("data-count", "1");
+    expect(mapProps.current?.fitTo).toEqual({ bbox: [114, 4, 128, 22], key: "ph" });
+    expect(screen.getByTestId("low-coverage")).toHaveTextContent("Only 1 vessel reported here");
+    expect(await screen.findByText("Manila")).toBeInTheDocument();
+  });
+
+  it("choosing a region updates the URL", async () => {
+    await renderView();
+    fireEvent.change(screen.getByLabelText("Region"), { target: { value: "ph" } });
+    expect(nav.replace).toHaveBeenCalledWith("/fleet?region=ph", { scroll: false });
+  });
 
   it("loads positions, labels them synthetic and lists them as a table view", async () => {
     await renderView();
