@@ -12,6 +12,14 @@ from database.models.fleet import (
 )
 from database.models.geo import Port
 from database.models.identity import ApiKey, Organization, OrganizationMember, User
+from database.models.ml import (
+    CongestionPrediction,
+    DelayPrediction,
+    EtaPrediction,
+    ModelEvaluation,
+    ModelVersion,
+    RiskAssessment,
+)
 from database.models.ops import AuditLog, SystemAlert
 from database.models.port_activity import (
     MaritimeRoute,
@@ -34,15 +42,21 @@ __all__ = [
     "Carrier",
     "CarrierIntegration",
     "CarrierIntegrationLog",
+    "CongestionPrediction",
     "Container",
     "DataSource",
+    "DelayPrediction",
+    "EtaPrediction",
     "IngestionLog",
     "MaritimeRoute",
+    "ModelEvaluation",
+    "ModelVersion",
     "Organization",
     "OrganizationMember",
     "Port",
     "PortArea",
     "PortObservation",
+    "RiskAssessment",
     "Shipment",
     "ShipmentEvent",
     "ShipmentItem",

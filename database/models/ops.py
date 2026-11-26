@@ -38,6 +38,7 @@ class SystemAlert(UUIDPrimaryKeyMixin, Base):
         sa.ForeignKey("data_sources.id", ondelete="SET NULL")
     )
     dedupe_key: Mapped[str | None] = mapped_column(sa.String(300))
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     raised_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
     acknowledged_at: Mapped[datetime | None]
     acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(

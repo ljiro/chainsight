@@ -20,6 +20,10 @@ dependencies = [
   "httpx>=0.28,<1",
   "websockets>=13",
   "pyproj>=3.7",
+  "numpy>=2.1",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "mlflow-skinny>=2.17",
 ]
 
 [dependency-groups]
