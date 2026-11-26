@@ -107,9 +107,20 @@ class Settings(BaseSettings):
 
     un_comtrade_api_key: SecretStr | None = None
     fred_api_key: SecretStr | None = None
+    # Quant research (Phase 5). Empty lists use the documented defaults in
+    # integrations/research (an a priori port universe and daily energy prices).
+    research_portwatch_ports: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    research_fred_series: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    research_history_start: str = "2019-01-01"
     eia_api_key: SecretStr | None = None
 
-    @field_validator("api_cors_origins", "weather_port_unlocodes", mode="before")
+    @field_validator(
+        "api_cors_origins",
+        "weather_port_unlocodes",
+        "research_portwatch_ports",
+        "research_fred_series",
+        mode="before",
+    )
     @classmethod
     def _split_csv(cls, value: object) -> object:
         if isinstance(value, str):
