@@ -18,8 +18,8 @@ Status: Draft v1 (Phase 0). Provider terms change. Re-verify each provider's doc
 | **AISStream** (aisstream.io) | Live vessel positions + static data | Free, needs sign-up | API key (`AISSTREAM_API_KEY`) | real_time | 2 |
 | **Open-Meteo** | Weather forecast, historical (archive), marine (waves) | Free for non-commercial use, no key. Commercial use needs a paid plan | None (optional `OPEN_METEO_API_KEY` for paid tier) | real_time / historical | 2–4 |
 | **IMF PortWatch** | Daily port calls, trade-volume estimates, chokepoint transits, disruptions | Open data, published via ArcGIS Hub / API | None | periodic (≈ weekly updates, daily granularity) | 2, 5 |
-| **NGA World Port Index** (Pub 150) | Port registry with coordinates | Public domain (US Gov) | None | historical (static reference) | 2 |
-| **UN/LOCODE** (UNECE) | Port codes | Free download | None | historical (static reference) | 2 |
+| **NGA World Port Index** (Pub 150) | Port registry with coordinates | Public domain (US Gov). Download endpoint refused automated requests in testing | None | historical (static reference) | later |
+| **UN/LOCODE** (UNECE) | Port registry, codes and coordinates (**implemented**) | Free download; data licence not stated by the mirror, so it is downloaded at import time and not bundled | None | historical (static reference) | 2 ✅ |
 | **UN Comtrade** | Monthly bilateral trade by HS code | Free tier with a registered subscription key, rate-limited | `UN_COMTRADE_API_KEY` | periodic (monthly, published with lag) | 5 |
 | **FRED / EIA** | Commodity and macro series (e.g. Brent, WTI, Henry Hub) | Free with API key | `FRED_API_KEY`, `EIA_API_KEY` | periodic | 5 |
 | **Maersk** | Track & Trace (DCSA), schedules | Developer portal, app registration *verify* | `MAERSK_CONSUMER_KEY` (+ secret) | real_time (polling) | 3 |
@@ -89,7 +89,7 @@ Status semantics shown in the UI:
 - Parsing maps AIS sentinel values to NULL: heading 511, SOG 102.3, COG 360, lat 91, lon 181. The timestamp comes from `MetaData.time_utc` (receiver time), with the AIS second-of-minute kept for quality checks.
 - Dedup key: `(mmsi, observed_at, source)` in Redis with a short TTL, and the DB primary key as the backstop.
 - Freshness: `data_sources.last_success_at` is updated each batch. Beat raises an alert if there are no messages for 5 minutes.
-- Mock mode: `AIS_PROVIDER=replay` replays a recorded or synthetic NDJSON file through the same parser. Rows are stored with the `ais-replay` data source (`data_mode = synthetic` or `historical` depending on the file's origin).
+- Without credentials: `AIS_PROVIDER=simulator` generates synthetic traffic (`ais-simulator`, `data_mode = synthetic`), and `AIS_PROVIDER=replay` plays back real recordings (`ais-replay`, `data_mode = historical`). These are separate sources, so a recording is never labeled synthetic and simulated data is never labeled historical. See [docs/integrations/ais.md](../integrations/ais.md).
 
 ## 5. Weather (Open-Meteo)
 
@@ -99,7 +99,7 @@ Status semantics shown in the UI:
 
 ## 6. Ports (PortWatch + registries)
 
-- The registry is loaded once from NGA WPI / UN/LOCODE into `ports`, with provenance.
+- The registry is loaded from UN/LOCODE into `ports`, with provenance and 8 km circular geofences (see [ports-and-weather.md](../integrations/ports-and-weather.md)).
 - PortWatch daily port activity loads into `port_observations` with `available_at` set to the dataset publication time. This matters for research because the series is revised and published with lag.
 - We derive our own port calls from AIS geofences. These are kept separate (`source = chainsight-ais-derived`) and never merged with PortWatch values.
 

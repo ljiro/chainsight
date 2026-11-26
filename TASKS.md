@@ -1,6 +1,6 @@
 # ChainSight — Task Checklist
 
-Legend: `[x]` done **and verified** (ran/tested) · `[~]` implemented, verification pending · `[ ]` not started.
+Legend: `[x]` done **and verified** (ran/tested) · `[~]` implemented, verification pending · `[ ]` not started. Caveats are noted inline in **bold**.
 Nothing is marked `[x]` unless it has been executed and tested.
 
 ## Phase 0 — Inspection and planning
@@ -33,20 +33,23 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] **Verification:** `docker compose up`, migrations applied to Postgres, integration tests, frontend lint/typecheck/test/build
 
 ## Phase 2 — Fleet tracking
-- [ ] Migration: vessels, vessel_identifiers, vessel_carrier_history, vessel_positions (hypertable), vessel_position_sources, voyages, voyage_port_calls, port_areas, maritime_routes, port_observations
-- [ ] Port registry importer (NGA WPI / UN/LOCODE) with provenance
-- [ ] AIS message DTOs + parser (sentinel handling, validation)
-- [ ] AISStream WebSocket adapter (subscription, reconnect/backoff, watchdog)
-- [ ] Replay AIS provider (NDJSON) for dev/tests
-- [ ] AIS consumer process: batching, dedup, quality flags, ingestion logs, Redis publish
-- [ ] Vessel registry + entity resolution (MMSI/IMO, identifier history)
-- [ ] Carrier ↔ vessel association (source + confidence)
-- [ ] Freshness monitoring + alerts
-- [ ] API: vessels, positions (bbox/time), tracks, ports; WebSocket live positions
-- [ ] Open-Meteo collector (ports) + attribution
-- [ ] UI: `/fleet` MapLibre map (filters, details, tracks, ports, freshness)
-- [ ] UI: `/vessels/[id]`
-- [ ] Tests: parser, dedup, entity resolution, consumer with mock WS, API, map state
+- [x] Migration `0003`: vessels, vessel_identifiers, vessel_carrier_history, vessel_positions (hypertable + 7-day compression), vessel_position_sources, voyages, voyage_port_calls, port_areas, maritime_routes, port_observations (hypertable), weather_observations — round-trip + drift tested
+- [x] Port registry importer (UN/LOCODE, 11,836 seaports, 8 km geofences) with provenance — NGA WPI deferred (download endpoint refused automated requests)
+- [x] AIS message DTOs + parser (sentinels, rejections, nanosecond timestamps, IMO checksum)
+- [x] AISStream WebSocket adapter (subscription, reconnect/backoff, idle watchdog) — tested with a fake socket; **not yet run against the live service (no API key)**
+- [x] Replay provider (recorded NDJSON, original timestamps) and simulator provider (synthetic, MID 200)
+- [x] AIS consumer process: batching, dedup, quality flags, 60 s ingestion windows, failure accounting, Redis publish — verified in Docker
+- [x] Vessel registry + entity resolution (MMSI/IMO/name history, MMSI reassignment via IMO)
+- [x] Carrier ↔ vessel association (name heuristic, method + confidence)
+- [x] Port-call and voyage detection from geofences (unknown arrivals kept as NULL)
+- [x] Freshness monitoring + deduplicated alerts (beat, every minute)
+- [x] API: fleet positions (GeoJSON), summary, approaching, vessels, track (gaps), port calls, ports, alerts; WebSocket live positions — verified live
+- [x] Open-Meteo collector (ports) + attribution — verified against the live API
+- [x] UI: `/fleet` MapLibre map (filters, details, tracks, ports, freshness, provenance banner) — **map canvas not visually verified (headless browser lacks WebGL)**
+- [x] UI: `/vessels/[id]`; dashboard fleet activity, approaching ports, open alerts
+- [x] Tests: backend 164 (unit + integration incl. pipeline, collectors, API, WebSocket); frontend 54
+- [ ] Route-deviation detection (moved to Phase 4 anomaly detection)
+- [ ] IMF PortWatch collector (moved to Phase 5, where its publication lag matters)
 
 ## Phase 3 — Shipment tracking
 - [ ] Migration: shipments, containers, shipment_items, shipment_vessels, shipment_events

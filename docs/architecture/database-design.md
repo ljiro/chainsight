@@ -73,7 +73,7 @@ system_alerts, audit_logs
 
 ### 3.2 Phase 2: fleet intelligence
 
-**vessels**: `id`, `mmsi INT NULL`, `imo INT NULL UNIQUE`, `name`, `call_sign`, `ship_type_code SMALLINT` (AIS type), `vessel_class ∈ {container, tanker, lng, bulk, general_cargo, ro_ro, passenger, other, unknown}`, `length_m`, `beam_m`, `gross_tonnage NULL`, `flag_country_code`, `first_seen_at`, `last_seen_at`, timestamps. MMSI is not a stable identity (it is reassigned on reflagging), so entity resolution prefers IMO and keeps `vessel_identifiers(vessel_id, scheme, value, valid_from, valid_to, source_id)` for history.
+**vessels** *(implemented in `0003`)*: `id`, `mmsi INT NULL`, `imo INT NULL UNIQUE`, `name`, `call_sign`, `ship_type_code SMALLINT` (AIS type), `vessel_class` + `vessel_class_source`. AIS ship types only distinguish cargo, tanker, passenger and so on, so `container`, `bulk`, `lng_carrier` and `lpg_carrier` are reserved for registry or manual enrichment and are never inferred from AIS. Also stores the latest position (`last_location`, `last_sog_knots`, … `last_position_source_id`), copied onto the row for the map, `length_m`, `beam_m`, `draught_m`, `destination` (as reported in AIS), `first_seen_at`, `last_seen_at`, timestamps. (Gross tonnage and flag state need a registry source; deferred.) MMSI is not a stable identity (it is reassigned on reflagging), so entity resolution prefers IMO and keeps `vessel_identifiers(vessel_id, scheme, value, valid_from, valid_to, source_id)` for history.
 
 **vessel_carrier_history**: `id`, `vessel_id`, `carrier_id`, `relation ∈ {operator, owner, charterer, slot}`, `valid_from`, `valid_to NULL`, `source_id`, `confidence NUMERIC(3,2)`.
 
@@ -85,9 +85,13 @@ system_alerts, audit_logs
 
 **voyages**: `id`, `vessel_id`, `carrier_id NULL`, `voyage_number`, `service_code`, `origin_port_id`, `destination_port_id`, `departed_at`, `arrived_at`, `status ∈ {planned, underway, completed, cancelled}`, `source_id`.
 
-**voyage_port_calls**: `id`, `voyage_id`, `port_id`, `sequence`, plus planned/estimated/actual `arrival_at`/`departure_at` columns. Detected calls (from geofence entry/exit) are marked with `detection_method ∈ {carrier_schedule, ais_geofence}`.
+**voyage_port_calls**: `id`, `voyage_id`, `port_id`, `sequence`, plus planned/estimated/actual `arrival_at`/`departure_at` columns. Detected calls (from geofence entry/exit) are marked with `detection_method ∈ {carrier_schedule, ais_geofence}`. `actual_arrival_at` is NULL when the vessel was already in port when first observed (the arrival time is unknown, not invented).
 
 **maritime_routes**: `id`, `name`, `origin_port_id`, `destination_port_id`, `path geography(LineString)`, `distance_nm`, `source`. Used for remaining-distance features.
+
+**port_areas**: `port_id`, `area geography(Polygon)`, `radius_m`, `method ∈ {circle_buffer, polygon}`. GiST index; used for port-call detection.
+
+**weather_observations**: `port_id`, `location`, `kind ∈ {current, forecast, historical}`, `valid_at`, `retrieved_at`, temperature/wind/gust/precipitation, `source_id`. `UNIQUE(port_id, kind, valid_at, source_id)`, append-only.
 
 **port_observations** (hypertable on `observed_at`): `port_id`, `observed_at`, `available_at`, `metric` (e.g. `vessels_in_port`, `arrivals`, `avg_wait_hours`, `portcalls_container`), `value`, `source_id`. PK `(port_id, metric, observed_at, source_id)`.
 

@@ -2,7 +2,7 @@
 
 Open-source maritime intelligence and quantitative analytics: real-time vessel tracking, multi-carrier shipment visibility, predictive logistics models, and alternative-data research, with honest data provenance throughout.
 
-> **Status: Phase 1 (Foundation).** The platform skeleton, database, API, worker, and dashboard shell are in place. No external provider is connected yet, and the UI says so. See [TASKS.md](TASKS.md) and the [roadmap](docs/architecture/development-roadmap.md).
+> **Status: Phase 2 (Fleet tracking).** AIS ingestion (AISStream, or a clearly labeled synthetic simulator), vessel registry, port calls from UN/LOCODE geofences, port weather from Open-Meteo, and a live fleet map. Shipment tracking (Phase 3) and models (Phase 4) are not built yet, and the UI says so. See [TASKS.md](TASKS.md) and the [roadmap](docs/architecture/development-roadmap.md).
 
 ## Principles
 
@@ -45,7 +45,7 @@ docker compose up --build
 | API docs (OpenAPI) | http://localhost:8000/api/v1/docs |
 | Liveness / readiness | http://localhost:8000/api/v1/health · `/api/v1/health/ready` |
 
-The `migrate` service applies Alembic migrations before the API and worker start.
+The `migrate` service applies Alembic migrations and, on first start, imports the UN/LOCODE port registry (about 7 MB download; skipped if offline). The `ais-consumer` service defaults to `AIS_PROVIDER=simulator`: **synthetic** vessels, labeled as such everywhere. For real AIS, set `AIS_PROVIDER=aisstream` and `AISSTREAM_API_KEY` ([docs/integrations/ais.md](docs/integrations/ais.md)).
 
 ## Native development
 
@@ -58,6 +58,8 @@ make install      # uv sync + npm install
 make migrate      # alembic upgrade head
 make api          # http://localhost:8000
 make worker       # Celery worker (separate terminal)
+make ports        # import the UN/LOCODE port registry
+make ais          # AIS consumer (AIS_PROVIDER=simulator | aisstream | replay)
 make web          # http://localhost:3000 (proxies /api/v1 to the API)
 ```
 
@@ -82,7 +84,7 @@ All configuration comes from environment variables ([.env.example](.env.example)
 
 ## Data sources
 
-See [integration-strategy.md](docs/architecture/integration-strategy.md) for each provider's access requirements, licensing, and data mode. Weather data, when enabled, is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). AIS data, when enabled, comes from [aisstream.io](https://aisstream.io/).
+See [integration-strategy.md](docs/architecture/integration-strategy.md) for each provider's access requirements, licensing, and data mode, and [docs/integrations/](docs/integrations/) for setup guides (AIS, ports, weather). Port codes and coordinates: UN/LOCODE (UNECE). Basemap: OpenFreeMap / OpenStreetMap contributors. Weather data, when enabled, is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). AIS data, when enabled, comes from [aisstream.io](https://aisstream.io/).
 
 ## License
 

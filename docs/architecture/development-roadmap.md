@@ -17,7 +17,7 @@ Each phase ends with the app running locally, migrations applied, tests green, d
 ### Phase 0: Inspection and planning ✅
 Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅
 **Goal:** `docker compose up` gives a running stack with a migrated database and an honest, empty dashboard.
 - Monorepo layout, Python project (uv), and the Next.js app.
 - Compose: TimescaleDB-HA (PostGIS included), Redis, migrate, api, worker, beat, web.
@@ -29,10 +29,10 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 
 **Exit criteria:** all tests pass locally, and the readiness endpoint reports DB/PostGIS/Redis healthy.
 
-### Phase 2: Fleet tracking
+### Phase 2: Fleet tracking ✅ (awaiting review)
 - Schema: vessels, identifiers, vessel_carrier_history, vessel_positions (hypertable), voyages, port calls, port areas, maritime_routes, port_observations.
-- Port registry import (NGA WPI / UN/LOCODE).
-- AISStream adapter + consumer process + replay provider. Dedup, quality flags, freshness alerts.
+- Port registry import (UN/LOCODE, with 8 km geofences).
+- AISStream adapter + consumer process + replay and simulator providers. Dedup, quality flags, freshness alerts.
 - Vessel registry and entity resolution (MMSI/IMO).
 - Carrier ↔ vessel associations, with source and confidence.
 - API: vessels, positions (bbox + time window), tracks, ports, plus the WebSocket live feed.
