@@ -5,6 +5,7 @@ import type {
   DataSourceStatus,
   Freshness,
   IntegrationStatus,
+  PositionFreshness,
 } from "@/lib/types";
 
 type Spec = { label: string; tone: BadgeTone };
@@ -39,6 +40,12 @@ const FRESHNESS: Record<Freshness, Spec> = {
   unknown: { label: "Unknown", tone: "neutral" },
 };
 
+const POSITION: Record<PositionFreshness, Spec> = {
+  live: { label: "Live", tone: "success" },
+  recent: { label: "Recent", tone: "info" },
+  stale: { label: "Stale", tone: "warning" },
+};
+
 const HEALTH: Record<ComponentState, Spec> = {
   ok: { label: "Healthy", tone: "success" },
   degraded: { label: "Degraded", tone: "warning" },
@@ -50,6 +57,7 @@ const MAPS = {
   source: SOURCE,
   mode: MODE,
   freshness: FRESHNESS,
+  position: POSITION,
   health: HEALTH,
 } as const;
 
