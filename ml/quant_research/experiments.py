@@ -173,7 +173,8 @@ def run_experiment(
             ),
             {"r": run_id, "h": snapshot_hash(feature, prices), "s": json.dumps({
                 "points": result.series, "in_sample_params": result.in_sample_params,
-                "n_configs_tested": result.n_configs_tested}),
+                "n_configs_tested": result.n_configs_tested,
+                "trial_sharpes": result.trial_sharpes}),
              "f": json.dumps(result.folds),
              "c": json.dumps(raw_cfg | {"resolved_backtest": result.config})},
         )  # fmt: skip

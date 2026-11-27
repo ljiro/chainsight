@@ -91,6 +91,14 @@ async def experiments() -> list[dict[str, Any]]:
     return await _read(rs.experiments)
 
 
+@router.get(
+    "/experiments/multiple-testing",
+    summary="Deflated Sharpe ratios and FDR-adjusted p-values across all experiments",
+)
+async def multiple_testing() -> dict[str, Any]:
+    return await _read(rs.multiple_testing)
+
+
 class ExperimentRequest(BaseModel):
     name: str = Field(min_length=3, max_length=200)
     hypothesis: str = Field(

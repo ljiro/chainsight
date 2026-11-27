@@ -246,6 +246,12 @@ def test_research_api(migrated_db: Engine, research_data: dict[str, Any]) -> Non
         assert any(
             e["id"] == detail["id"] and e["latest_run"]["status"] == "succeeded" for e in listed
         )
+        mtest = c.get("/api/v1/research/experiments/multiple-testing").json()
+        mine = next(e for e in mtest["experiments"] if e["experiment_id"] == detail["id"])
+        assert mtest["n_trials"] >= mtest["n_experiments"] >= 1
+        assert mine["moments_assumed_normal"] is False
+        if mine["deflated_sharpe"] is not None:  # deflating never helps
+            assert mine["deflated_sharpe"] <= mine["psr_zero"] + 1e-12
         bad = c.post("/api/v1/research/experiments", json={"name": "bad", "hypothesis": "unknown asset here",
                                                             "config": {"feature": "x|W|level", "asset": "fred:NOPE"}})  # fmt: skip
         assert bad.status_code == 422

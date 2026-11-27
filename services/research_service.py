@@ -12,6 +12,7 @@ import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection, Engine
 
+from ml.quant_research import multiple_testing as mt
 from ml.quant_research import stats
 from ml.quant_research.experiments import ExperimentConfig, create_experiment, run_experiment
 from ml.quant_research.features import (
@@ -216,3 +217,67 @@ def rerun(engine: Engine, experiment_id: uuid.UUID) -> dict[str, Any]:
         pass
     with engine.connect() as conn:
         return experiment_detail(conn, experiment_id)
+
+
+_LATEST_RUNS = """
+    SELECT DISTINCT ON (e.id) e.id AS experiment_id, e.name, r.id AS run_id, r.finished_at,
+           r.series -> 'trial_sharpes' AS trial_sharpes,
+           (r.series ->> 'n_configs_tested')::int AS n_configs,
+           (SELECT jsonb_object_agg(m.metric, m.value) FROM backtest_metrics m
+             WHERE m.backtest_run_id = r.id AND m.split = 'out_of_sample') AS oos
+    FROM research_experiments e JOIN backtest_runs r ON r.experiment_id = e.id
+    WHERE r.status = 'succeeded'
+    ORDER BY e.id, r.finished_at DESC
+"""
+
+
+def multiple_testing(conn: Connection) -> dict[str, Any]:
+    """Deflated Sharpe ratios and FDR-adjusted p-values across every experiment's latest run.
+
+    The trial count is every grid configuration searched by every experiment; the trial
+    variance pools those configurations' full-sample per-period Sharpe ratios.
+    """
+    rows = [dict(r._mapping) for r in conn.execute(sa.text(_LATEST_RUNS)).all()]
+    n_trials = sum(r["n_configs"] or 1 for r in rows)
+    pooled = [float(v) for r in rows for v in (r["trial_sharpes"] or [])]
+    trial_var = float(np.var(pooled, ddof=1)) if len(pooled) > 1 else None
+    out = []
+    for r in rows:
+        oos = r["oos"] or {}
+        sr, n = oos.get("sharpe_per_period"), oos.get("n_periods")
+        skew, kurt = oos.get("skew"), oos.get("kurtosis")
+        moments_known = skew is not None and kurt is not None
+        res: dict[str, float | None] = {"sr_benchmark": None, "deflated_sharpe": None,
+                                        "psr_zero": None}  # fmt: skip
+        if sr is not None and n:
+            sk = float(skew) if skew is not None else 0.0
+            ku = float(kurt) if kurt is not None else 3.0
+            if trial_var is not None:
+                res = mt.deflated_sharpe(
+                    float(sr), int(n), sk, ku, n_trials=n_trials, trial_var=trial_var
+                )
+            else:
+                res["psr_zero"] = mt.probabilistic_sharpe(float(sr), 0.0, int(n), sk, ku)
+        out.append({
+            "experiment_id": r["experiment_id"], "name": r["name"], "run_id": r["run_id"],
+            "n_periods": n, "sharpe_per_period": sr, "skew": skew, "kurtosis": kurt,
+            "moments_assumed_normal": not moments_known, **res,
+            "p_value": None if res["psr_zero"] is None else 1 - res["psr_zero"],
+        })  # fmt: skip
+    for item, adj in zip(out, mt.benjamini_hochberg([o["p_value"] for o in out]), strict=True):
+        item["p_value_bh"] = adj
+    return {
+        "n_experiments": len(rows),
+        "n_trials": n_trials,
+        "trial_sharpe_variance": trial_var,
+        "experiments": out,
+        "method": (
+            "Deflated Sharpe ratio (Bailey & López de Prado, 2014): the probability that the "
+            "out-of-sample per-period Sharpe beats the Sharpe expected from the best of "
+            "n_trials skill-less strategies. p-values are one-sided (1 - PSR vs 0), adjusted "
+            "with Benjamini-Hochberg across experiments. Trials are correlated, so the "
+            "correction is conservative. Runs made before moments were recorded assume "
+            "normal returns; re-run them for exact values."
+        ),
+        "disclaimer": DISCLAIMER,
+    }

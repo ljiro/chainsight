@@ -318,3 +318,70 @@ def test_portwatch_error_payload_raises() -> None:
         and rec.metrics == {"n_tanker": 12.0}
         and rec.country_iso3 is None
     )
+
+
+# --- multiple testing ------------------------------------------------------------------
+
+
+def test_probabilistic_sharpe_matches_closed_form_and_penalizes_fat_tails() -> None:
+    from scipy.stats import norm
+
+    from ml.quant_research import multiple_testing as mt
+
+    assert mt.probabilistic_sharpe(0.0, 0.0, 100) == pytest.approx(0.5)
+    expected = norm.cdf(0.1 * np.sqrt(99) / np.sqrt(1 + 0.5 * 0.1**2 / 1))
+    assert mt.probabilistic_sharpe(0.1, 0.0, 100) == pytest.approx(expected)
+    normal = mt.probabilistic_sharpe(0.1, 0.0, 100, skew=0.0, kurtosis=3.0)
+    fat = mt.probabilistic_sharpe(0.1, 0.0, 100, skew=-1.0, kurtosis=10.0)
+    assert normal is not None and fat is not None and fat < normal
+    assert mt.probabilistic_sharpe(0.1, 0.0, 1) is None
+
+
+def test_expected_max_sharpe_grows_with_trials_and_matches_simulation() -> None:
+    from ml.quant_research import multiple_testing as mt
+
+    assert mt.expected_max_sharpe(1, 0.01) == 0.0
+    small, large = mt.expected_max_sharpe(10, 0.01), mt.expected_max_sharpe(1000, 0.01)
+    assert 0 < small < large
+    rng = np.random.default_rng(0)
+    simulated = rng.normal(0, 0.1, size=(20_000, 100)).max(axis=1).mean()
+    assert mt.expected_max_sharpe(100, 0.01) == pytest.approx(simulated, rel=0.03)
+
+
+def test_deflated_sharpe_shrinks_the_best_of_many_noise_strategies() -> None:
+    from ml.quant_research import multiple_testing as mt
+
+    rng = np.random.default_rng(1)
+    n, trials = 260, 200
+    sharpes = rng.normal(0, 1, size=(trials, n))
+    sr = sharpes.mean(axis=1) / sharpes.std(axis=1, ddof=1)
+    best = float(sr.max())
+    raw = mt.probabilistic_sharpe(best, 0.0, n)
+    deflated = mt.deflated_sharpe(best, n, 0.0, 3.0, n_trials=trials, trial_var=float(sr.var()))
+    assert raw is not None and raw > 0.95  # looks "significant" on its own
+    assert deflated["deflated_sharpe"] is not None and deflated["deflated_sharpe"] < 0.9
+
+
+def test_benjamini_hochberg_matches_reference_and_keeps_missing() -> None:
+    from ml.quant_research import multiple_testing as mt
+
+    adj = mt.benjamini_hochberg([0.01, 0.04, None, 0.03, 0.2])
+    # Reference: statsmodels.stats.multitest.multipletests(method="fdr_bh")
+    from statsmodels.stats.multitest import multipletests
+
+    ref = multipletests([0.01, 0.04, 0.03, 0.2], method="fdr_bh")[1]
+    assert adj[2] is None
+    assert [adj[0], adj[1], adj[3], adj[4]] == pytest.approx(list(ref))
+    assert mt.benjamini_hochberg([None]) == [None]
+
+
+def test_backtest_records_trial_sharpes_and_moments() -> None:
+    rng = np.random.default_rng(3)
+    idx = pd.date_range("2019-01-07", periods=200, freq="W-MON", tz="UTC")
+    frame = pd.DataFrame({"x": rng.normal(size=200), "y": rng.normal(0, 0.02, 200)}, index=idx)
+    cfg = BacktestConfig(min_train_periods=80, test_periods=20, lookbacks=(13, 26))
+    res = run_backtest(frame, cfg)
+    assert len(res.trial_sharpes) == len(cfg.grid)
+    oos = res.metrics["out_of_sample"]
+    assert oos["kurtosis"]["value"] is not None and oos["kurtosis"]["value"] > 0
+    assert oos["sharpe_per_period"]["value"] is not None

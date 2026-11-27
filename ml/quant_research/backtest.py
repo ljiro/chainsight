@@ -74,6 +74,9 @@ class BacktestResult:
     metrics: dict[str, dict[str, dict[str, float | None]]]  # split -> metric -> {value, benchmark}
     folds: list[dict[str, Any]] = field(default_factory=list)
     series: list[dict[str, Any]] = field(default_factory=list)
+    # Full-sample, per-period net Sharpe of every grid configuration (the trials searched);
+    # their dispersion feeds the deflated Sharpe ratio (multiple_testing.py).
+    trial_sharpes: list[float] = field(default_factory=list)
 
 
 def zscore(x: pd.Series, lookback: int) -> pd.Series:
@@ -134,6 +137,10 @@ def metrics(
         "cagr": float(eq.iloc[-1] ** (1 / years) - 1) if years > 0 and eq.iloc[-1] > 0 else None,
         "ann_vol": sd * math.sqrt(ppy),
         "sharpe": sharpe,
+        "sharpe_per_period": float(sr_p) if sd > 0 else None,
+        "skew": float(r.skew()) if n > 2 and sd > 0 else None,
+        # Raw kurtosis (normal = 3), as the probabilistic Sharpe ratio expects.
+        "kurtosis": float(r.kurt() + 3) if n > 3 and sd > 0 else None,
         "sharpe_se": se,
         "sharpe_t": (sharpe / se) if sharpe is not None and se else None,
         "sortino": float(r.mean() / downside * math.sqrt(ppy))
@@ -208,6 +215,12 @@ def run_backtest(frame: pd.DataFrame, cfg: BacktestConfig) -> BacktestResult:
     # In-sample (optimistic): best parameters on all data, evaluated on all data.
     all_mask = pd.Series(True, index=d.index)
     is_params, _ = _best(x, y, all_mask, cfg, ppy)
+    trial_sharpes = []
+    for params in cfg.grid:
+        tr = net_returns(positions(x, *params, cfg), y, cfg).dropna()
+        tsd = tr.std()
+        if len(tr) > 2 and tsd > 0:
+            trial_sharpes.append(round(float(tr.mean() / tsd), 6))
     pos_is = positions(x, *is_params, cfg)
     r_is = net_returns(pos_is, y, cfg)
 
@@ -239,6 +252,7 @@ def run_backtest(frame: pd.DataFrame, cfg: BacktestConfig) -> BacktestResult:
         },
         folds=folds,
         series=series,
+        trial_sharpes=trial_sharpes,
     )
 
 
