@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "./api";
+import { apiDelete, apiGet, apiPatch, apiPost } from "./api";
 import type {
   Alert,
   ApproachingVessel,
@@ -21,7 +21,14 @@ import type {
   CongestionPort,
   DelayPrediction,
   EtaPrediction,
+  Me,
+  Member,
   ModelVersion,
+  Organization,
+  ApiKeyInfo,
+  AuditEntry,
+  CreatedApiKey,
+  Role,
   MultipleTesting,
   PortCongestion,
   PredictionsSummary,
@@ -66,6 +73,11 @@ export const queryKeys = {
   experiments: ["research", "experiments"] as const,
   multipleTesting: ["research", "experiments", "multiple-testing"] as const,
   experiment: (id: string) => ["research", "experiment", id] as const,
+  me: ["auth", "me"] as const,
+  org: ["org"] as const,
+  members: ["org", "members"] as const,
+  apiKeys: ["org", "api-keys"] as const,
+  auditLogs: (offset: number) => ["org", "audit-logs", offset] as const,
 };
 
 export function useReadiness() {
@@ -404,5 +416,124 @@ export function useRerunExperiment(id: string) {
   return useMutation({
     mutationFn: () => apiPost<ExperimentDetail>(`/research/experiments/${id}/runs`, {}),
     onSuccess: invalidate,
+  });
+}
+
+// --- auth and organization ------------------------------------------------------------
+
+export function useMe() {
+  return useQuery({
+    queryKey: queryKeys.me,
+    queryFn: ({ signal }) => apiGet<Me>("/auth/me", { signal }),
+    staleTime: 60_000,
+  });
+}
+
+export function hasPermission(me: Me | undefined, permission: string): boolean {
+  return !!me?.permissions.includes(permission);
+}
+
+export function useLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { email: string; password: string }) =>
+      apiPost<{ role: Role; permissions: string[] }>("/auth/login", body),
+    onSuccess: () => qc.clear(),
+  });
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<void>("/auth/logout", {}),
+    onSettled: () => qc.clear(),
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (body: { current_password: string; new_password: string }) => apiPost<void>("/auth/password", body),
+  });
+}
+
+export function useOrg() {
+  return useQuery({ queryKey: queryKeys.org, queryFn: ({ signal }) => apiGet<Organization>("/org", { signal }) });
+}
+
+export function useUpdateOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string }) => apiPatch<Organization>("/org", body),
+    onSuccess: (org) => {
+      qc.setQueryData(queryKeys.org, org);
+      void qc.invalidateQueries({ queryKey: queryKeys.me });
+    },
+  });
+}
+
+export function useMembers() {
+  return useQuery({ queryKey: queryKeys.members, queryFn: ({ signal }) => apiGet<Member[]>("/org/members", { signal }) });
+}
+
+function useInvalidateOrg() {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: queryKeys.org });
+}
+
+export function useAddMember() {
+  const invalidate = useInvalidateOrg();
+  return useMutation({
+    mutationFn: (body: { email: string; full_name?: string; role: Role; password: string }) =>
+      apiPost<Member>("/org/members", body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateMember() {
+  const invalidate = useInvalidateOrg();
+  return useMutation({
+    mutationFn: ({ userId, ...body }: { userId: string; role?: Role; is_active?: boolean }) =>
+      apiPatch<Member>(`/org/members/${userId}`, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRemoveMember() {
+  const invalidate = useInvalidateOrg();
+  return useMutation({ mutationFn: (userId: string) => apiDelete(`/org/members/${userId}`), onSuccess: invalidate });
+}
+
+export function useApiKeys(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.apiKeys,
+    queryFn: ({ signal }) => apiGet<ApiKeyInfo[]>("/org/api-keys", { signal }),
+    enabled,
+  });
+}
+
+export function useCreateApiKey() {
+  const invalidate = useInvalidateOrg();
+  return useMutation({
+    mutationFn: (body: { name: string; role: Role; expires_in_days: number | null }) =>
+      apiPost<CreatedApiKey>("/org/api-keys", body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeApiKey() {
+  const invalidate = useInvalidateOrg();
+  return useMutation({ mutationFn: (id: string) => apiDelete(`/org/api-keys/${id}`), onSuccess: invalidate });
+}
+
+export function useAuditLogs(offset: number, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.auditLogs(offset),
+    queryFn: ({ signal }) =>
+      apiGet<{ items: AuditEntry[]; total: number; limit: number; offset: number }>(
+        `/org/audit-logs?limit=25&offset=${offset}`,
+        { signal },
+      ),
+    enabled,
+    placeholderData: keepPreviousData,
   });
 }

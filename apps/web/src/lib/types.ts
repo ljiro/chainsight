@@ -628,3 +628,51 @@ export type MultipleTesting = {
   method: string;
   disclaimer: string;
 };
+
+export type Role = "owner" | "admin" | "analyst" | "viewer";
+
+export type Me = {
+  user: { id: string; email: string; full_name: string | null; last_login_at: string | null } | null;
+  organization: { id: string; name: string; slug: string };
+  role: Role | null;
+  permissions: string[];
+  auth_method: "session" | "api_key";
+};
+
+export type Organization = { id: string; name: string; slug: string; created_at: string; member_count: number };
+
+export type Member = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  last_login_at: string | null;
+  role: Role;
+  joined_at: string;
+};
+
+export type ApiKeyInfo = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+};
+
+export type CreatedApiKey = ApiKeyInfo & { key: string; role: Role };
+
+export type AuditEntry = {
+  id: string;
+  occurred_at: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  ip_address: string | null;
+  changes: Record<string, unknown>;
+  actor_email: string | null;
+  actor_api_key: string | null;
+};
