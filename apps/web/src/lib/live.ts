@@ -7,9 +7,11 @@ export type LiveStatus = "connecting" | "live" | "offline";
 
 export function liveSocketUrl(): string {
   const configured = process.env.NEXT_PUBLIC_LIVE_WS_URL;
-  if (configured) return configured;
-  // The API port is exposed directly for WebSockets (Next.js rewrites don't proxy upgrades).
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  // "same-origin": an edge proxy routes /api/v1/ws/* to the API (production deployment).
+  if (configured === "same-origin") return `${proto}://${window.location.host}/api/v1/ws/positions`;
+  if (configured) return configured;
+  // Local stack: the API port is exposed directly (Next.js rewrites don't proxy upgrades).
   return `${proto}://${window.location.hostname}:8000/api/v1/ws/positions`;
 }
 

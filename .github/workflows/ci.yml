@@ -67,3 +67,50 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 30
+    env:
+      E2E_EMAIL: e2e-owner@chainsight.test
+      E2E_PASSWORD: ci-only e2e passphrase
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure the stack
+        run: |
+          cat > .env <<ENV
+          AIS_PROVIDER=simulator
+          JWT_SECRET=$(openssl rand -base64 48)
+          BOOTSTRAP_ADMIN_EMAIL=${E2E_EMAIL}
+          BOOTSTRAP_ADMIN_PASSWORD=${E2E_PASSWORD}
+          ENV
+      - name: Start the stack
+        run: docker compose up --build -d db redis api web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Wait for the API and web app
+        run: |
+          for i in $(seq 1 150); do
+            curl -fsS http://localhost:8000/api/v1/health/ready >/dev/null && curl -fsS http://localhost:3000/login >/dev/null && exit 0
+            sleep 2
+          done
+          docker compose ps; exit 1
+      - name: Smoke tests
+        working-directory: apps/web
+        run: npm run e2e
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --no-color --tail=200 api web migrate
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
