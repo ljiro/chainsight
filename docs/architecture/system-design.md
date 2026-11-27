@@ -133,15 +133,16 @@ Validation runs at two layers. Pydantic DTOs at the adapter boundary check types
 ### 5.3 Security
 
 - Secrets come only from environment variables (`.env` in dev, a secret manager in deployment) and are loaded into `pydantic.SecretStr` so they don't appear in logs or reprs.
-- API keys are stored as SHA-256 hashes with a short public prefix for lookup. Users are authenticated with Argon2id password hashes and short-lived JWTs (Phase 6).
+- API keys are stored as SHA-256 hashes with a short public prefix for lookup. Users are authenticated with Argon2id password hashes, short-lived JWTs in httpOnly cookies and rotating refresh sessions.
 - RBAC roles: `owner`, `admin`, `analyst`, `viewer`, scoped per organization. Every org-owned table has `organization_id`, and repository functions require it, so isolation is enforced in one place.
-- Webhook endpoints (carrier push) verify HMAC signatures with timestamp tolerance.
+- Webhook endpoints (carrier push) verify HMAC signatures with timestamp tolerance and reject replays.
+- Full details, including the known limitations: [security.md](security.md).
 
 ### 5.4 Observability
 
 - Structured JSON logs (structlog) with `request_id` and, for ingestion, `data_source` and `ingestion_log_id`.
 - `/api/v1/health` (liveness) and `/api/v1/health/ready` (DB, extensions, migration revision, Redis).
-- Phase 6: Prometheus metrics (`/metrics`), Grafana dashboards (ingestion lag, messages/s, rejection rate, API latency, model drift), and OpenTelemetry traces across API → Celery.
+- Prometheus metrics (`/metrics`, worker :9808, AIS consumer :9809), a Grafana overview dashboard, alert rules, and optional OpenTelemetry traces. See [observability.md](../operations/observability.md). Model drift is tracked by the live evaluation in `model_evaluations` (Phase 4) rather than in Grafana.
 
 ### 5.5 Failure handling
 

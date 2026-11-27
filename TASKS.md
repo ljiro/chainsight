@@ -98,10 +98,21 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] Deflated Sharpe (Bailey & López de Prado) + Benjamini–Hochberg across experiments; trial Sharpes and OOS moments stored per run; API + UI column; none of the seeded experiments survives (DSR ≤ 0.06)
 
 ## Phase 6 — Production hardening
-- [ ] Authentication (Argon2id, JWT), API keys, RBAC, org isolation
-- [ ] Rate limiting, webhook HMAC verification, audit logging
-- [ ] Prometheus metrics, Grafana dashboards, OpenTelemetry
-- [ ] Backups + restore runbook
-- [ ] Deployment configuration + image publishing
-- [ ] Playwright E2E smoke tests
-- [ ] `/settings` (org, integrations, API keys, users, source health)
+- [x] Migration `0007`: auth_sessions (hashed, rotating refresh tokens), webhook_deliveries (replay protection), append-only trigger on audit_logs — round-trip + drift tested; trigger verified to survive backup/restore
+- [x] Authentication: Argon2id passwords, 15-min HS256 JWT access tokens in httpOnly SameSite=Strict cookies, rotating refresh sessions checked on every request (sign-out/deactivation immediate), generic sign-in errors with timing equalization; bootstrap owner + `python -m services.auth` CLI
+- [x] API keys (`cs_<prefix>_<secret>`, SHA-256, shown once, scoped by role, expiry, revocation) via `X-API-Key` or Bearer
+- [x] RBAC (viewer < analyst < admin < owner) on every router; last-owner and self-modification guards; CSRF header on cookie writes; WebSocket handshake authenticated
+- [x] Org isolation: shipments, predictions, experiments, members, keys, audit scoped to the caller's org (cross-org IDs → 404) — integration tested with two orgs
+- [x] Rate limiting (Redis fixed windows: per IP, per principal, sign-in per email/IP; fails open); trusted-proxy aware client IPs (**Next.js passes client X-Forwarded-For unchanged, so only an overwriting edge proxy is trusted**)
+- [x] Carrier push webhooks: HMAC-SHA256 over timestamp + body, ±5 min tolerance, secret rotation, delivery-id dedup, only updates already-tracked shipments
+- [x] Audit logging: sign-ins/failures, sessions, passwords, members, keys, org, shipment track/import, experiments, webhooks; Settings view
+- [x] Prometheus metrics (API with route templates + multiprocess workers, Celery multiprocess, AIS consumer), Grafana overview dashboard, alert rules (`--profile monitoring`); optional OpenTelemetry tracing (FastAPI, SQLAlchemy, Redis, httpx, Celery)
+- [x] Backups: scheduled verified `pg_dump` with checksums + retention, TimescaleDB-aware restore, runbook — **restore drill done 27 Nov 2026 (row counts matched)**
+- [x] Deployment: production compose behind Caddy (auto-TLS, security headers), production settings validation, GHCR image publishing with SBOM/provenance/Trivy — **verified locally over HTTPS; not yet deployed to a public host, and the images workflow has not run on GitHub yet**
+- [x] Playwright E2E smoke tests (sign-in, all pages, demo shipment, API key issue/revoke, sign-out) — pass against dev and the local production drill; CI job added (**not yet run on GitHub**)
+- [x] `/settings`: organization, account/password, members & roles, API keys, carrier integrations, source health, audit log
+- [x] Phase 5 follow-up: deflated Sharpe ratio + Benjamini–Hochberg across experiments
+- [x] Tests: backend 330 (unit + integration incl. auth flows, RBAC, isolation, webhooks, audit trigger, rate limits, metrics); frontend 102; E2E 7
+- [ ] Generate frontend types from OpenAPI (`apps/web/src/lib/types.ts`) — *deferred: most research/prediction endpoints return untyped dicts, so generated types would add little until response models exist*
+- [ ] MFA / SSO, email invitations and self-service password reset — *needs an email provider / IdP*
+- [ ] Alert routing (Alertmanager) — *deployment-specific*

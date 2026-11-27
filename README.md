@@ -2,7 +2,7 @@
 
 Open-source maritime intelligence and quantitative analytics: real-time vessel tracking, multi-carrier shipment visibility, predictive logistics models, and alternative-data research, with honest data provenance throughout.
 
-> **Status: Phase 5 (Quantitative research).** Live AIS fleet map with vessel registry, port calls and port weather; shipment tracking through a carrier adapter framework (generic DCSA adapter, a labeled demo carrier, CSV import); versioned, append-only predictions (vessel ETA, anomalies, port congestion; no delay model until real arrivals exist); and a point-in-time research workspace: IMF PortWatch port and chokepoint activity against FRED energy prices, statistical tests, and walk-forward backtests with costs and a buy-and-hold benchmark. Research results are not investment advice; see the [model cards](docs/ml/README.md) and [research methodology](docs/research/methodology.md).
+> **Status: Phase 6 (Production hardening) complete.** Live AIS fleet map with vessel registry, port calls and port weather; shipment tracking through a carrier adapter framework (generic DCSA adapter, a labeled demo carrier, CSV import, signed push webhooks); versioned, append-only predictions (vessel ETA, anomalies, port congestion; no delay model until real arrivals exist); and a point-in-time research workspace with walk-forward backtests and deflated Sharpe ratios. Multi-tenant with sign-in, roles, API keys and an append-only audit log; Prometheus/Grafana monitoring, verified backups and a production deployment behind Caddy. Research results are not investment advice; see the [model cards](docs/ml/README.md), [research methodology](docs/research/methodology.md) and [security model](docs/architecture/security.md).
 
 ## Principles
 
@@ -37,13 +37,24 @@ Prerequisite: Docker Desktop (or OrbStack) with Compose v2.
 ```bash
 cp .env.example .env          # placeholders only; works as-is for local use
 docker compose up --build
+# Create the first user (prompts for a password of 12+ characters):
+docker compose exec api python -m services.auth create-user --email you@example.com --role owner
 ```
+
+Then sign in at http://localhost:3000. Add more members and API keys under **Settings**.
+Alternatively, set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env` before the
+first start.
 
 | Service | URL |
 |---|---|
 | Dashboard | http://localhost:3000 |
 | API docs (OpenAPI) | http://localhost:8000/api/v1/docs |
 | Liveness / readiness | http://localhost:8000/api/v1/health · `/api/v1/health/ready` |
+
+Optional profiles: `docker compose --profile monitoring up -d` (Prometheus :9090, Grafana
+:3001; see [observability](docs/operations/observability.md)) and `--profile backup` (daily
+verified `pg_dump`; see [backups](docs/operations/backups.md)). For production, see
+[deployment](docs/operations/deployment.md).
 
 The `migrate` service applies Alembic migrations and, on first start, imports the UN/LOCODE port registry (about 7 MB download; skipped if offline). The `ais-consumer` service defaults to `AIS_PROVIDER=simulator`: **synthetic** vessels, labeled as such everywhere. For real AIS, set `AIS_PROVIDER=aisstream` and `AISSTREAM_API_KEY` ([docs/integrations/ais.md](docs/integrations/ais.md)).
 
@@ -74,9 +85,13 @@ uv run pytest                       # unit + integration (migration round-trip, 
 
 cd apps/web && npm test             # frontend component tests (Vitest + Testing Library)
 make lint typecheck
+
+# End-to-end smoke tests against a running stack (an owner account is required):
+cd apps/web && npx playwright install chromium
+E2E_EMAIL=you@example.com E2E_PASSWORD='…' npm run e2e
 ```
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs lint, type checks, migrations, and all tests against a TimescaleDB-HA service container, plus the frontend lint, typecheck, test, and build.
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs lint, type checks, migrations, and all tests against a TimescaleDB-HA service container, plus the frontend lint, typecheck, test, and build. A third job then boots the compose stack and runs the Playwright smoke tests. [images.yml](.github/workflows/images.yml) publishes the API and web images to GHCR.
 
 ## Configuration
 

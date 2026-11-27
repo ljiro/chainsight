@@ -40,7 +40,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 - Open-Meteo collector for ports.
 - **Starts AIS history collection.**
 
-### Phase 3: Shipment tracking ✅ (awaiting review)
+### Phase 3: Shipment tracking ✅
 - Schema: shipments, containers, shipment_items, shipment_vessels, shipment_events.
 - Carrier adapter base (retries, rate limits, logging, status) + mock carrier + CSV import.
 - One real carrier adapter if credentials are available (first candidates: Maersk or Hapag-Lloyd via DCSA T&T).
@@ -48,7 +48,7 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 - Delay detection rules (ACT/EST vs. original PLN).
 - UI: `/shipments` search, list, and timeline. `/carriers` comparison.
 
-### Phase 4: Predictive intelligence
+### Phase 4: Predictive intelligence ✅
 - Training dataset builders with point-in-time joins, and dataset hashing.
 - ETA: great-circle distance ÷ recent SOG baseline, then quantile gradient boosting (scikit-learn HistGradientBoosting, ADR-013), with time-based splits and MAE/MedAE/RMSE/within-6/12/24h.
 - Delay classifier: logistic baseline → gradient boosting, with class weighting, calibration (isotonic), and PR-AUC.
@@ -57,14 +57,16 @@ Architecture, database, integration strategy, roadmap, and `TASKS.md`.
 - MLflow tracking, the `model_versions` registry, append-only prediction tables, outcome back-fill, and live evaluation.
 - UI: `/predictions`, and prediction widgets on shipment and vessel pages.
 
-### Phase 5: Quantitative research
+### Phase 5: Quantitative research ✅
 - `ml/quant_research`: point-in-time feature builders (PortWatch port/chokepoint activity, composites, AIS arrivals/departures/waits/deviations; D/W/M; rolling, WoW/YoY, z-scores). Delivered; see docs/research/methodology.md.
 - Statistics: correlations, rolling correlations, OLS with HAC errors, ADF/KPSS, lead-lag cross-correlation, Granger (with caveats).
 - Backtesting: walk-forward, costs, slippage, sizing, drawdown, Sharpe, turnover, and benchmark. Look-ahead guards on `available_at`.
 - Experiments persisted, plus a reproducibility manifest (code SHA, data hash, config).
 - UI: `/research`.
 
-### Phase 6: Production hardening
+### Phase 6: Production hardening ✅
+See [security model](security.md), [deployment](../operations/deployment.md),
+[backups](../operations/backups.md) and [observability](../operations/observability.md).
 - AuthN (Argon2id + JWT), API keys, RBAC, and org isolation tests.
 - Rate limiting, webhook HMAC verification, and audit logging.
 - Prometheus metrics, Grafana dashboards, and OpenTelemetry tracing.
