@@ -1,10 +1,14 @@
 # Production deployment from published images (see docs/operations/deployment.md).
 #
 #   cp infrastructure/deployment/.env.production.example .env.production   # fill it in
-#   docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.production up -d
+#   infrastructure/deployment/preflight.sh .env.production
+#   docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.production \
+#     --profile monitoring up -d
+#   infrastructure/deployment/verify.sh https://$CHAINSIGHT_DOMAIN
 #
-# Only Caddy publishes ports (80/443). The database, Redis, API and web app are reachable on
-# the internal network only, and the API refuses to start with unsafe production settings.
+# Only Caddy publishes public ports (80/443); the monitoring profile binds to loopback. The
+# database, Redis, API and web app are reachable on the internal network only, and the API
+# refuses to start with unsafe production settings.
 name: chainsight-prod
 
 x-image: &api-image ghcr.io/${GHCR_OWNER:?set GHCR_OWNER}/chainsight-api:${CHAINSIGHT_VERSION:?set CHAINSIGHT_VERSION}
@@ -148,6 +152,64 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # --- monitoring (opt-in): add `--profile monitoring` -------------------------------------
+  # Bound to the host's loopback only; reach them over an SSH tunnel:
+  #   ssh -L 3001:127.0.0.1:3001 -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 <host>
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["monitoring"]
+    entrypoint: ["/etc/prometheus/entrypoint.sh"]
+    command: ["--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}"]
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    volumes:
+      - ../monitoring/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    networks: [internal]
+    restart: unless-stopped
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    profiles: ["monitoring"]
+    entrypoint: ["/etc/alertmanager/entrypoint.sh"]
+    environment:
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-}
+      ALERT_SMTP_FROM: ${ALERT_SMTP_FROM:-}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+    volumes:
+      - ../monitoring/alertmanager/entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+      - amdata:/alertmanager
+    ports: ["127.0.0.1:9093:9093"]
+    networks: [internal]
+    restart: unless-stopped
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["127.0.0.1:3001:3000"]
+    networks: [internal]
+    depends_on: [prometheus]
+    restart: unless-stopped
+    logging: *logging
+
 networks:
   internal:
 
@@ -157,3 +219,6 @@ volumes:
   mldata:
   caddydata:
   caddyconfig:
+  promdata:
+  amdata:
+  grafanadata:
