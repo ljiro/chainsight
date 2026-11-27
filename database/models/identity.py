@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, INET
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum
@@ -66,3 +66,23 @@ class ApiKey(UUIDPrimaryKeyMixin, Base):
     expires_at: Mapped[datetime | None]
     revoked_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
+
+
+class AuthSession(UUIDPrimaryKeyMixin, Base):
+    """A refresh-token session. Only a SHA-256 of the token is stored; tokens rotate on use."""
+
+    __tablename__ = "auth_sessions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    refresh_hash: Mapped[str] = mapped_column(sa.String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
+    last_used_at: Mapped[datetime | None]
+    expires_at: Mapped[datetime]
+    revoked_at: Mapped[datetime | None]
+    ip_address: Mapped[str | None] = mapped_column(INET)
+    user_agent: Mapped[str | None] = mapped_column(sa.Text)

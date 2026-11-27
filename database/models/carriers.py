@@ -95,3 +95,21 @@ class CarrierIntegrationLog(UUIDPrimaryKeyMixin, Base):
     error_code: Mapped[str | None] = mapped_column(sa.String(64))
     message: Mapped[str | None] = mapped_column(sa.Text)
     provider_request_id: Mapped[str | None] = mapped_column(sa.String(200))
+
+
+class WebhookDelivery(UUIDPrimaryKeyMixin, Base):
+    """One signed carrier push. (carrier, delivery_id) is unique, so replays are rejected."""
+
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        sa.UniqueConstraint("carrier_id", "delivery_id"),
+        sa.Index("ix_webhook_deliveries_received_at", sa.text("received_at DESC")),
+    )
+
+    carrier_id: Mapped[uuid.UUID] = mapped_column(sa.ForeignKey("carriers.id", ondelete="CASCADE"))
+    delivery_id: Mapped[str] = mapped_column(sa.String(200))
+    received_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
+    signed_at: Mapped[datetime]
+    status: Mapped[str] = mapped_column(sa.String(32))
+    events_received: Mapped[int] = mapped_column(server_default="0")
+    error: Mapped[str | None] = mapped_column(sa.Text)

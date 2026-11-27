@@ -1,6 +1,11 @@
 """ORM models. Importing this package registers every table on `Base.metadata`."""
 
-from database.models.carriers import Carrier, CarrierIntegration, CarrierIntegrationLog
+from database.models.carriers import (
+    Carrier,
+    CarrierIntegration,
+    CarrierIntegrationLog,
+    WebhookDelivery,
+)
 from database.models.fleet import (
     Vessel,
     VesselCarrierHistory,
@@ -11,7 +16,7 @@ from database.models.fleet import (
     VoyagePortCall,
 )
 from database.models.geo import Port
-from database.models.identity import ApiKey, Organization, OrganizationMember, User
+from database.models.identity import ApiKey, AuthSession, Organization, OrganizationMember, User
 from database.models.ml import (
     CongestionPrediction,
     DelayPrediction,
@@ -49,6 +54,7 @@ from database.models.sources import DataSource, IngestionLog
 __all__ = [
     "ApiKey",
     "AuditLog",
+    "AuthSession",
     "BacktestMetric",
     "BacktestRun",
     "Carrier",
@@ -89,4 +95,5 @@ __all__ = [
     "Voyage",
     "VoyagePortCall",
     "WeatherObservation",
+    "WebhookDelivery",
 ]
