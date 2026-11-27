@@ -38,6 +38,10 @@ user: ## Create a user: make user EMAIL=you@example.com ROLE=owner
 	uv run python -m services.auth create-user --email $(EMAIL) --role $(or $(ROLE),owner)
 backup: ## Back up the database now (Docker)
 	docker compose --profile backup run --rm --entrypoint /scripts/backup.sh backup
+preflight: ## Check .env.production and this host before deploying
+	infrastructure/deployment/preflight.sh $(or $(ENV),.env.production)
+verify: ## Check a deployment from outside: make verify URL=https://your-domain
+	infrastructure/deployment/verify.sh $(URL)
 web: ## Run the Next.js dev server
 	cd apps/web && npm run dev
 
