@@ -95,7 +95,7 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] Docs: `docs/research/methodology.md`
 - [x] Tests: backend 279 (unit + integration incl. mocked PortWatch/FRED, revisions, reproducibility, API); frontend 92
 - [ ] UN Comtrade / EIA collectors — *optional; need API keys*
-- [ ] Deflated Sharpe / multiple-testing correction across experiments
+- [x] Deflated Sharpe (Bailey & López de Prado) + Benjamini–Hochberg across experiments; trial Sharpes and OOS moments stored per run; API + UI column; none of the seeded experiments survives (DSR ≤ 0.06)
 
 ## Phase 6 — Production hardening
 - [ ] Authentication (Argon2id, JWT), API keys, RBAC, org isolation

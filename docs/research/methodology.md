@@ -85,7 +85,22 @@ no earlier position changes.
 - **Benchmark:** buy and hold the same asset over the same periods, with one entry cost.
 - **Metrics:** Sharpe (no risk-free rate), Lo (2002) standard error and t-stat, total return,
   CAGR, volatility, maximum drawdown, Sortino, hit rate, exposure, annual turnover, and
-  information ratio vs buy and hold.
+  information ratio vs buy and hold. Per-period Sharpe, skewness and (raw) kurtosis are stored
+  for the multiple-testing correction below.
+- **Multiple-testing correction** (`ml/quant_research/multiple_testing.py`,
+  `GET /api/v1/research/experiments/multiple-testing`):
+  - Every run also stores the full-sample per-period Sharpe of each grid configuration it searched.
+  - The **deflated Sharpe ratio** (Bailey & López de Prado, 2014) is the probabilistic Sharpe ratio
+    of the out-of-sample returns, tested against the Sharpe expected from the best of `N` skill-less
+    strategies. `N` is the number of configurations searched by *all* experiments (latest run of
+    each). Their Sharpe variance is pooled. Skewness and kurtosis of the OOS returns widen the
+    standard error.
+  - One-sided p-values (1 − PSR vs 0) are adjusted with Benjamini–Hochberg across experiments.
+  - The UI labels any result with a deflated Sharpe below 0.95 "No edge after deflation",
+    whatever its t-stat.
+  - Grid configurations are correlated, so the effective number of trials is smaller than `N`.
+    The correction is therefore conservative. Runs made before moments were recorded assume
+    normal returns and are flagged; re-run them for exact values.
 - **Reproducibility:** each run stores the git commit, a SHA-256 of the exact inputs, the
   resolved configuration, per-fold choices and every position taken (`research_signals`).
   Identical inputs give identical runs.
@@ -94,11 +109,15 @@ no earlier position changes.
 
 Results on the dev stack, 26 Nov 2026 (weekly, out-of-sample July 2021 – Nov 2026):
 
-| Experiment | OOS Sharpe | Buy and hold | t-stat | Reading |
-|---|---|---|---|---|
-| Hormuz + Bab el-Mandeb tanker transits (YoY) vs Brent | 0.13 | 0.23 | 0.30 | No edge |
-| Suez share of Suez + Cape tanker transits (z26) vs Brent | −1.09 | 0.28 | −2.52 | Loses to buy and hold; the chosen direction flipped between regimes |
-| Malacca tanker capacity (YoY) vs WTI | 0.27 | 0.18 | 0.59 | Not distinguishable from zero |
+| Experiment | OOS Sharpe | Buy and hold | t-stat | Deflated SR | p (BH) | Reading |
+|---|---|---|---|---|---|---|
+| Hormuz + Bab el-Mandeb tanker transits (YoY) vs Brent | 0.13 | 0.23 | 0.30 | 0.03 | 0.58 | No edge |
+| Suez share of Suez + Cape tanker transits (z26) vs Brent | −1.09 | 0.28 | −2.52 | 0.00 | 0.99 | Loses to buy and hold; the chosen direction flipped between regimes |
+| Malacca tanker capacity (YoY) vs WTI | 0.27 | 0.18 | 0.59 | 0.06 | 0.58 | Not distinguishable from zero |
+
+Deflated Sharpe ratios (27 Nov 2026) use 54 trials (3 experiments × 18 configurations). The
+deflation benchmark is a per-period Sharpe of 0.139, about 1.0 annualized. Returns are
+fat-tailed: OOS kurtosis is 5.6–19.
 
 All three looked better in-sample (Sharpe 0.44–0.66). That gap is the point of the
 walk-forward design. **None of these is evidence of a tradeable signal.**
@@ -108,8 +127,9 @@ walk-forward design. **None of these is evidence of a tradeable signal.**
 - **Short sample:** about 360 weekly observations since 2019. A Sharpe ratio's standard error
   over five years is about 0.45, so only very large effects are detectable.
 - **Multiple testing:** every feature × transform × lag × parameter combination is another
-  trial. The UI reports the configuration count per fold, but no deflated Sharpe is computed
-  yet.
+  trial. Experiments are corrected with a deflated Sharpe ratio and Benjamini–Hochberg (above).
+  Ad-hoc exploration in the analysis tab (correlations, Granger tests) is not counted as trials,
+  so treat those p-values as descriptive.
 - **First release only:** realistic, but slightly different from what a reader of today's
   revised data sees.
 - **Simplified execution:** one asset per experiment, spot prices (not tradeable futures, with
