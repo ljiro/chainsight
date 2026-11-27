@@ -301,3 +301,73 @@ def test_websocket_requires_authentication(client: TestClient) -> None:
 
     with pytest.raises(WebSocketDisconnect), client.websocket_connect("/api/v1/ws/positions") as ws:
         ws.receive_json()
+
+
+def _push(c: TestClient, events: list[dict[str, Any]], *, delivery: str, secret: str = "whsec-test",
+          ts: int | None = None) -> Any:  # fmt: skip
+    import json
+    import time
+
+    from services.shipment_tracking import webhooks as wh
+
+    body = json.dumps(events).encode()
+    t = int(time.time()) if ts is None else ts
+    return c.post("/api/v1/webhooks/carriers/demo", content=body, headers={
+        "Content-Type": "application/json", wh.DELIVERY_HEADER: delivery,
+        wh.SIGNATURE_HEADER: f"t={t},v1={wh.sign(secret, t, body)}"})  # fmt: skip
+
+
+def _event(ref: str, eid: str) -> dict[str, Any]:
+    return {"eventID": eid, "eventType": "TRANSPORT", "eventClassifierCode": "ACT",
+            "transportEventTypeCode": "DEPA", "eventDateTime": "2026-11-20T08:00:00Z",
+            "eventCreatedDateTime": "2026-11-20T08:05:00Z",
+            "documentReferences": [{"documentReferenceType": "BKG", "documentReferenceValue": ref}],
+            "transportCall": {"UNLocationCode": "NLRTM", "modeOfTransport": "VESSEL"}}  # fmt: skip
+
+
+def test_signed_carrier_push_updates_only_tracked_shipments(migrated_db: Engine) -> None:
+    import time
+
+    settings = Settings(_env_file=None, carrier_webhook_secrets='{"demo": "whsec-test"}')  # type: ignore[call-arg]
+    ref = f"DEMO{uuid.uuid4().int % 10**7:07d}"
+    with TestClient(create_app()) as a:
+        login(a, make_user(migrated_db, "analyst"))
+        assert (
+            a.post(
+                "/api/v1/shipments/track", json={"carrier": "demo", "reference": ref}, headers=CSRF
+            ).status_code
+            == 200
+        )
+    with TestClient(create_app(settings)) as c:
+        delivery = uuid.uuid4().hex
+        ok = _push(
+            c, [_event(ref, f"push-{delivery}"), _event("NOTTRACKED1", "x1")], delivery=delivery
+        )
+        assert ok.status_code == 202, ok.text
+        expected = {
+            "status": "processed",
+            "events_inserted": 1,
+            "unmatched_events": 1,
+            "shipments_updated": 1,
+        }
+        assert expected.items() <= ok.json().items()
+        replay = _push(c, [_event(ref, f"push-{delivery}")], delivery=delivery)
+        assert replay.status_code == 200 and replay.json()["status"] == "duplicate"
+        assert _push(c, [_event(ref, "y")], delivery="d2", secret="wrong").status_code == 401
+        assert (
+            _push(c, [_event(ref, "y")], delivery="d3", ts=int(time.time()) - 3600).json()["error"][
+                "code"
+            ]
+            == "signature_expired"
+        )
+        assert (
+            c.post("/api/v1/webhooks/carriers/msc", content=b"[]").status_code == 404
+        )  # not configured
+    with migrated_db.connect() as conn:
+        n = conn.execute(sa.text("SELECT count(*) FROM shipment_events e JOIN shipments s ON s.id = e.shipment_id "
+                                 "WHERE s.reference_value = :r AND e.source_event_id = :e"),
+                         {"r": ref, "e": f"push-{delivery}"}).scalar()  # fmt: skip
+        created = conn.execute(
+            sa.text("SELECT count(*) FROM shipments WHERE reference_value = 'NOTTRACKED1'")
+        ).scalar()
+    assert n == 1 and created == 0

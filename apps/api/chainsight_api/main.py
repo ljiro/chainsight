@@ -22,6 +22,7 @@ from chainsight_api.routers import (
     predictions,
     research,
     shipments,
+    webhooks,
 )
 from chainsight_api.schemas.common import ErrorResponse
 from core.logging_config import configure_logging, get_logger
@@ -102,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     v1.include_router(health.router)
     v1.include_router(auth.router)
     v1.include_router(live.router)
+    v1.include_router(webhooks.router)  # HMAC-signed, see services/shipment_tracking/webhooks.py
     readers = [Depends(require(Permission.DATA_READ))]
     for module in (catalog, fleet, shipments, predictions, research):
         v1.include_router(module.router, dependencies=readers)
