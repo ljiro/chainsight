@@ -371,3 +371,38 @@ def test_signed_carrier_push_updates_only_tracked_shipments(migrated_db: Engine)
             sa.text("SELECT count(*) FROM shipments WHERE reference_value = 'NOTTRACKED1'")
         ).scalar()
     assert n == 1 and created == 0
+
+
+def test_cli_revoke_sessions_signs_the_user_out_everywhere(
+    client: TestClient, migrated_db: Engine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from services.auth.__main__ import main as auth_cli
+
+    email, other = make_user(migrated_db, "viewer"), make_user(migrated_db, "viewer")
+    assert login(client, email).status_code == 200
+    with TestClient(create_app()) as bystander:
+        assert login(bystander, other).status_code == 200
+
+        auth_cli(["revoke-sessions", "--email", email])
+        assert "Revoked 1 session(s)" in capsys.readouterr().out
+
+        # The session is checked on every request, so the still-valid access token stops working
+        # at once, and the refresh cookie cannot mint a new one.
+        assert client.get("/api/v1/auth/me").status_code == 401
+        assert client.post("/api/v1/auth/refresh", headers=CSRF).status_code == 401
+        assert bystander.get("/api/v1/auth/me").status_code == 200
+
+        auth_cli(["revoke-sessions", "--all"])
+        assert bystander.get("/api/v1/auth/me").status_code == 401
+
+    with migrated_db.connect() as conn:
+        scopes = (
+            conn.execute(
+                sa.text(
+                    "SELECT changes->>'scope' FROM audit_logs WHERE action = 'sessions.revoked_cli'"
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert email in scopes and "all" in scopes
