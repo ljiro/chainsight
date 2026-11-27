@@ -12,6 +12,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    // For a local production drill behind Caddy's self-signed localhost certificate.
+    ignoreHTTPSErrors: process.env.E2E_IGNORE_HTTPS_ERRORS === "1",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
