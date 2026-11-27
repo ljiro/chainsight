@@ -13,6 +13,35 @@ permissions:
   contents: read
 
 jobs:
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts
+        run: shellcheck --severity=warning infrastructure/*/*.sh infrastructure/monitoring/alertmanager/*.sh
+      - name: Compose files
+        run: |
+          docker compose config -q
+          printf 'GHCR_OWNER=o\nCHAINSIGHT_VERSION=1\nPOSTGRES_PASSWORD=p\nCHAINSIGHT_DOMAIN=d\nJWT_SECRET=j\nACME_EMAIL=a\n' > /tmp/prod.env
+          docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file /tmp/prod.env --profile monitoring config -q
+      - name: Prometheus rules and config
+        run: |
+          docker run --rm -v "$PWD/infrastructure/monitoring:/m:ro" --entrypoint promtool prom/prometheus:v3.1.0 check rules /m/alerts.yml
+          sed 's|/etc/prometheus/alerts.yml|/m/alerts.yml|' infrastructure/monitoring/prometheus.yml > /tmp/prometheus.yml
+          docker run --rm -v "$PWD/infrastructure/monitoring:/m:ro" -v /tmp/prometheus.yml:/p.yml:ro --entrypoint promtool prom/prometheus:v3.1.0 check config /p.yml
+      - name: Alertmanager config (all receivers)
+        env:
+          ALERT_WEBHOOK_URL: https://hooks.example.invalid/x?a="1"
+          ALERT_SLACK_WEBHOOK_URL: https://hooks.slack.example.invalid/T/B/X
+          ALERT_EMAIL_TO: ops@example.invalid
+          ALERT_SMTP_SMARTHOST: smtp.example.invalid:587
+          ALERT_SMTP_FROM: am@example.invalid
+          ALERT_SMTP_USERNAME: u
+          ALERT_SMTP_PASSWORD: p\w"x
+        run: |
+          sh infrastructure/monitoring/alertmanager/entrypoint.sh render > /tmp/am.yml
+          docker run --rm -v /tmp/am.yml:/c.yml:ro --entrypoint amtool prom/alertmanager:v0.28.0 check-config /c.yml
+
   backend:
     runs-on: ubuntu-latest
     services:
