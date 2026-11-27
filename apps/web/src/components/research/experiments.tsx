@@ -7,8 +7,14 @@ import type { Selection } from "@/components/research/explorer";
 import { EmptyState, ErrorState, LoadingRows } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useCreateExperiment, useExperiment, useExperiments, useRerunExperiment } from "@/lib/queries";
-import { METRICS, featureKey, formatDay, formatNumber, metricCell, oosVerdict } from "@/lib/research";
+import {
+  useCreateExperiment,
+  useExperiment,
+  useExperiments,
+  useMultipleTesting,
+  useRerunExperiment,
+} from "@/lib/queries";
+import { METRICS, featureKey, formatDay, formatNumber, formatP, metricCell, oosVerdict } from "@/lib/research";
 import type { BacktestRun, Experiment } from "@/lib/types";
 import { formatAge } from "@/lib/utils";
 
@@ -17,6 +23,8 @@ const headRow = "text-left text-[11px] tracking-wide text-muted-foreground upper
 
 export function ExperimentsTable({ selected, onSelect }: { selected: string | null; onSelect: (id: string) => void }) {
   const { data, error, isPending, refetch } = useExperiments();
+  const mt = useMultipleTesting();
+  const deflated = new Map((mt.data?.experiments ?? []).map((d) => [d.experiment_id, d]));
   if (isPending) return <LoadingRows rows={3} />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   if (data.length === 0)
@@ -37,6 +45,15 @@ export function ExperimentsTable({ selected, onSelect }: { selected: string | nu
               OOS Sharpe (vs hold)
             </th>
             <th className="py-2 pr-3 text-right font-medium">t-stat</th>
+            <th
+              className="py-2 pr-3 text-right font-medium"
+              title="Deflated Sharpe ratio: probability the OOS Sharpe beats the best of all configurations tested across experiments by chance"
+            >
+              Deflated SR
+            </th>
+            <th className="py-2 pr-3 text-right font-medium" title="One-sided p-value, Benjamini-Hochberg adjusted across experiments">
+              p (FDR)
+            </th>
             <th className={th}>Verdict</th>
             <th className="py-2 font-medium">Last run</th>
           </tr>
@@ -46,7 +63,8 @@ export function ExperimentsTable({ selected, onSelect }: { selected: string | nu
             const run = e.latest_run;
             const s = metricCell(run?.metrics, "out_of_sample", "sharpe");
             const t = metricCell(run?.metrics, "out_of_sample", "sharpe_t").value;
-            const v = oosVerdict(run);
+            const d = run ? deflated.get(e.id) : undefined;
+            const v = oosVerdict(run, d?.run_id === run?.id ? d?.deflated_sharpe : null);
             return (
               <tr key={e.id} aria-selected={selected === e.id} data-testid={`experiment-${e.id}`}
                   className="cursor-pointer hover:bg-muted/50 aria-selected:bg-muted" onClick={() => onSelect(e.id)}>
@@ -61,6 +79,10 @@ export function ExperimentsTable({ selected, onSelect }: { selected: string | nu
                   {formatNumber(s.value)} <span className="text-muted-foreground">({formatNumber(s.benchmark)})</span>
                 </td>
                 <td className="py-2 pr-3 text-right tabular-nums">{formatNumber(t)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums" data-testid="deflated-sharpe">
+                  {formatNumber(d?.deflated_sharpe)}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums">{formatP(d?.p_value_bh)}</td>
                 <td className="py-2 pr-3"><Badge tone={v.tone}>{v.label}</Badge></td>
                 <td className="py-2 text-xs text-muted-foreground">{run ? formatAge(run.started_at) : "—"}</td>
               </tr>
@@ -68,6 +90,12 @@ export function ExperimentsTable({ selected, onSelect }: { selected: string | nu
           })}
         </tbody>
       </table>
+      {mt.data && mt.data.n_experiments > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground" data-testid="multiple-testing-note">
+          Corrected for {mt.data.n_trials} configurations tested across {mt.data.n_experiments} experiments. A
+          deflated Sharpe under 0.95 means the result is consistent with picking the luckiest of them.
+        </p>
+      ) : null}
     </div>
   ); // prettier-ignore
 }

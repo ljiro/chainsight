@@ -603,3 +603,28 @@ export type Experiment = {
 };
 
 export type ExperimentDetail = Experiment & { runs: BacktestRun[]; disclaimer: string };
+
+export type DeflatedSharpe = {
+  experiment_id: string;
+  name: string;
+  run_id: string;
+  n_periods: number | null;
+  sharpe_per_period: number | null;
+  skew: number | null;
+  kurtosis: number | null;
+  moments_assumed_normal: boolean;
+  sr_benchmark: number | null;
+  deflated_sharpe: number | null;
+  psr_zero: number | null;
+  p_value: number | null;
+  p_value_bh: number | null;
+};
+
+export type MultipleTesting = {
+  n_experiments: number;
+  n_trials: number;
+  trial_sharpe_variance: number | null;
+  experiments: DeflatedSharpe[];
+  method: string;
+  disclaimer: string;
+};

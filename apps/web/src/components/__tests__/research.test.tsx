@@ -54,6 +54,8 @@ describe("research helpers", () => {
     expect(oosVerdict(run(-1.09, 0.28, -2.5)).label).toBe("Below buy-and-hold");
     expect(oosVerdict(run(1.5, 0.2, 3.1)).label).toMatch(/verify/);
     expect(oosVerdict(run(0, 0, 0, "failed")).label).toBe("Run failed");
+    expect(oosVerdict(run(1.5, 0.2, 3.1), 0.6).label).toBe("No edge after deflation");
+    expect(oosVerdict(run(1.5, 0.2, 3.1), 0.99).label).toMatch(/verify/);
   });
 });
 
@@ -65,7 +67,11 @@ describe("research components", () => {
   });
 
   it("lists experiments with OOS Sharpe next to buy-and-hold and a verdict", async () => {
-    mockFetch(() => ({ body: [experiment("e1", "Gulf tanker transits vs Brent", run(0.13, 0.23, 0.3))] }));
+    mockFetch((path) =>
+      path.endsWith("/multiple-testing")
+        ? { body: { n_experiments: 0, n_trials: 0, trial_sharpe_variance: null, experiments: [], method: "", disclaimer: "" } }
+        : { body: [experiment("e1", "Gulf tanker transits vs Brent", run(0.13, 0.23, 0.3))] },
+    );
     const onSelect = vi.fn();
     renderWithQuery(<ExperimentsTable selected={null} onSelect={onSelect} />);
     const row = await screen.findByTestId("experiment-e1");
@@ -73,6 +79,22 @@ describe("research components", () => {
     expect(row).toHaveTextContent("0.13 (0.23)");
     fireEvent.click(within(row).getByRole("button", { name: "Gulf tanker transits vs Brent" }));
     expect(onSelect).toHaveBeenCalledWith("e1");
+  });
+
+  it("deflates a strong-looking Sharpe for the number of configurations tested", async () => {
+    mockFetch((path) =>
+      path.endsWith("/multiple-testing")
+        ? { body: { n_experiments: 3, n_trials: 54, trial_sharpe_variance: 0.002, method: "", disclaimer: "",
+                    experiments: [{ experiment_id: "e1", name: "x", run_id: "r1", n_periods: 150, sharpe_per_period: 0.2,
+                                    skew: 0, kurtosis: 3, moments_assumed_normal: false, sr_benchmark: 0.1,
+                                    deflated_sharpe: 0.62, psr_zero: 0.99, p_value: 0.01, p_value_bh: 0.03 }] } }
+        : { body: [experiment("e1", "Lucky", run(1.5, 0.2, 3.1))] },
+    ); // prettier-ignore
+    renderWithQuery(<ExperimentsTable selected={null} onSelect={vi.fn()} />);
+    const row = await screen.findByTestId("experiment-e1");
+    await waitFor(() => expect(within(row).getByTestId("deflated-sharpe")).toHaveTextContent("0.62"));
+    expect(within(row).getByText("No edge after deflation")).toBeInTheDocument();
+    expect(screen.getByTestId("multiple-testing-note")).toHaveTextContent("54 configurations");
   });
 
   it("shows out-of-sample, benchmark and optimistic in-sample columns side by side", async () => {

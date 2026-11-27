@@ -22,6 +22,7 @@ import type {
   DelayPrediction,
   EtaPrediction,
   ModelVersion,
+  MultipleTesting,
   PortCongestion,
   PredictionsSummary,
   VesselAnomaly,
@@ -63,6 +64,7 @@ export const queryKeys = {
   market: (key: string) => ["research", "market", key] as const,
   analysis: (feature: string, asset: string, lag: number) => ["research", "analysis", feature, asset, lag] as const,
   experiments: ["research", "experiments"] as const,
+  multipleTesting: ["research", "experiments", "multiple-testing"] as const,
   experiment: (id: string) => ["research", "experiment", id] as const,
 };
 
@@ -362,6 +364,13 @@ export function useExperiments() {
   return useQuery({
     queryKey: queryKeys.experiments,
     queryFn: ({ signal }) => apiGet<Experiment[]>("/research/experiments", { signal }),
+  });
+}
+
+export function useMultipleTesting() {
+  return useQuery({
+    queryKey: queryKeys.multipleTesting,
+    queryFn: ({ signal }) => apiGet<MultipleTesting>("/research/experiments/multiple-testing", { signal }),
   });
 }
 

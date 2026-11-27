@@ -115,8 +115,15 @@ export function metricCell(
   return metrics?.[`${split}.${key}`] ?? { value: null, benchmark: null };
 }
 
-/** Out-of-sample verdict in words. Deliberately conservative. */
-export function oosVerdict(run: Pick<BacktestRunSummary, "metrics" | "status"> | null | undefined): {
+/** Deflated Sharpe probability needed to call an out-of-sample edge credible. */
+export const DSR_THRESHOLD = 0.95;
+
+/** Out-of-sample verdict in words. Deliberately conservative: a deflated Sharpe below
+ * DSR_THRESHOLD (after correcting for every configuration tested) overrides the t-stat. */
+export function oosVerdict(
+  run: Pick<BacktestRunSummary, "metrics" | "status"> | null | undefined,
+  deflated?: number | null,
+): {
   label: string;
   tone: "neutral" | "warning" | "success" | "danger";
 } {
@@ -127,6 +134,7 @@ export function oosVerdict(run: Pick<BacktestRunSummary, "metrics" | "status"> |
   if (s.value == null) return { label: "No result", tone: "neutral" };
   if (t != null && Math.abs(t) < 2) return { label: "No significant edge", tone: "neutral" };
   if (s.benchmark != null && s.value < s.benchmark) return { label: "Below buy-and-hold", tone: "warning" };
+  if (deflated != null && deflated < DSR_THRESHOLD) return { label: "No edge after deflation", tone: "neutral" };
   return { label: "Beats benchmark OOS (verify)", tone: "success" };
 }
 
