@@ -8,7 +8,7 @@ export
 endif
 
 help: ## Show targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # --- full stack -------------------------------------------------------------------------
 up: ## Build and start the full stack in Docker
@@ -34,6 +34,10 @@ ports: ## Import the UN/LOCODE port registry (downloads ~7 MB)
 	uv run python -m services.ingestion.port_registry
 ais: ## Run the AIS consumer (AIS_PROVIDER=simulator|aisstream|replay)
 	uv run python -m services.ingestion.ais_consumer
+user: ## Create a user: make user EMAIL=you@example.com ROLE=owner
+	uv run python -m services.auth create-user --email $(EMAIL) --role $(or $(ROLE),owner)
+backup: ## Back up the database now (Docker)
+	docker compose --profile backup run --rm --entrypoint /scripts/backup.sh backup
 web: ## Run the Next.js dev server
 	cd apps/web && npm run dev
 
@@ -49,5 +53,7 @@ test: ## Run all tests (integration tests need TEST_DATABASE_URL)
 	cd apps/web && npm test
 test-unit: ## Backend unit tests only
 	uv run pytest tests/unit
+e2e: ## Playwright smoke tests against the running stack (E2E_EMAIL, E2E_PASSWORD)
+	cd apps/web && npm run e2e
 
-.PHONY: help up down logs infra install migrate ports ais api worker web lint typecheck test test-unit
+.PHONY: help up down logs infra install migrate ports ais api worker user backup web lint typecheck test test-unit e2e
