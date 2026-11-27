@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from chainsight_api.auth import ReadPrincipal, client_ip, require
 from chainsight_api.errors import ApiError
 from chainsight_api.schemas.common import Page, PageParams
 from chainsight_api.schemas.shipments import (
@@ -22,6 +23,9 @@ from core.settings import get_settings
 from core.timeutils import utcnow
 from database.enums import DelayStatus, ShipmentStatus
 from database.session import session_scope
+from services import audit
+from services.auth.rbac import Permission
+from services.auth.service import Principal
 from services.shipment_tracking import queries
 from services.shipment_tracking.contracts import (
     CarrierAuthError,
@@ -37,7 +41,6 @@ from services.shipment_tracking.registry import CarrierRegistry, build_registry
 from services.shipment_tracking.service import (
     CarrierNotFound,
     IntegrationNotAvailable,
-    local_org_id,
     track,
 )
 
@@ -55,23 +58,31 @@ def get_registry(request: Request) -> CarrierRegistry:
 
 
 Registry = Annotated[CarrierRegistry, Depends(get_registry)]
+Writer = Annotated[Principal, Depends(require(Permission.SHIPMENTS_WRITE))]
 
 
-async def _detail_or_404(session: AsyncSession, shipment_id: uuid.UUID) -> dict[str, Any]:
-    detail = await queries.get_shipment(session, await local_org_id(session), shipment_id, utcnow())
+async def _detail_or_404(
+    session: AsyncSession, org_id: uuid.UUID, shipment_id: uuid.UUID
+) -> dict[str, Any]:
+    detail = await queries.get_shipment(session, org_id, shipment_id, utcnow())
     if detail is None:
         raise ApiError(404, "shipment_not_found", "Shipment not found")
     return detail
 
 
 async def _track(
-    session: AsyncSession, registry: CarrierRegistry, carrier: str, ref: TrackingReference
+    session: AsyncSession,
+    registry: CarrierRegistry,
+    org_id: uuid.UUID,
+    carrier: str,
+    ref: TrackingReference,
 ) -> uuid.UUID:
     threshold = get_settings().shipment_delay_threshold_hours
     try:
         outcome = await track(
-            session, registry, carrier_code=carrier, reference=ref, threshold_hours=threshold
-        )
+            session, registry, org_id=org_id, carrier_code=carrier, reference=ref,
+            threshold_hours=threshold,
+        )  # fmt: skip
     except CarrierNotFound as exc:
         raise ApiError(404, "carrier_not_found", f"Unknown carrier '{carrier}'") from exc
     except IntegrationNotAvailable as exc:
@@ -99,6 +110,7 @@ async def _track(
 
 @router.get("/shipments", response_model=Page[ShipmentSummary], summary="Search tracked shipments")
 async def list_shipments(
+    principal: ReadPrincipal,
     session: Session,
     page: Annotated[PageParams, Query()],
     q: Annotated[str | None, Query(min_length=2, max_length=64)] = None,
@@ -108,7 +120,7 @@ async def list_shipments(
     active_only: bool = False,
 ) -> Page[ShipmentSummary]:
     items, total = await queries.list_shipments(
-        session, await local_org_id(session), q=q, carrier=carrier,
+        session, principal.organization_id, q=q, carrier=carrier,
         status=status.value if status else None,
         delay_status=delay_status.value if delay_status else None,
         active_only=active_only, limit=page.limit, offset=page.offset,
@@ -120,8 +132,8 @@ async def list_shipments(
 
 
 @router.get("/shipments/summary", response_model=ShipmentsSummary, summary="Shipment KPIs")
-async def shipments_summary(session: Session) -> dict[str, Any]:
-    return await queries.shipments_summary(session, await local_org_id(session))
+async def shipments_summary(principal: ReadPrincipal, session: Session) -> dict[str, Any]:
+    return await queries.shipments_summary(session, principal.organization_id)
 
 
 @router.post(
@@ -131,13 +143,18 @@ async def shipments_summary(session: Session) -> dict[str, Any]:
     summary="Track a reference with a carrier (creates or refreshes the shipment)",
 )
 async def track_reference(
-    session: Session, registry: Registry, body: TrackRequest
+    request: Request, principal: Writer, session: Session, registry: Registry, body: TrackRequest
 ) -> dict[str, Any]:
     value = normalize_reference(body.reference)
     ref_type = body.reference_type.value if body.reference_type else detect_reference_type(value)
     ref = TrackingReference(reference_type=ref_type, value=value)
-    shipment_id = await _track(session, registry, body.carrier.lower(), ref)
-    return await _detail_or_404(session, shipment_id)
+    org = principal.organization_id
+    shipment_id = await _track(session, registry, org, body.carrier.lower(), ref)
+    await audit.record(session, "shipment.tracked", principal=principal, entity_type="shipment",
+                       entity_id=shipment_id, changes={"carrier": body.carrier.lower(),
+                       "reference_type": ref_type}, ip=client_ip(request))  # fmt: skip
+    await session.commit()
+    return await _detail_or_404(session, org, shipment_id)
 
 
 @router.post(
@@ -149,7 +166,7 @@ async def track_reference(
     },
 )
 async def import_shipments(
-    request: Request, session: Session, response: Response
+    request: Request, principal: Writer, session: Session, response: Response
 ) -> dict[str, Any]:
     body = await request.body()
     if len(body) > MAX_CSV_BYTES:
@@ -159,8 +176,13 @@ async def import_shipments(
     except UnicodeDecodeError as exc:
         raise ApiError(422, "invalid_encoding", "CSV must be UTF-8 encoded") from exc
     report = await import_csv(
-        session, text, threshold_hours=get_settings().shipment_delay_threshold_hours
-    )
+        session, text, org_id=principal.organization_id,
+        threshold_hours=get_settings().shipment_delay_threshold_hours,
+    )  # fmt: skip
+    await audit.record(session, "shipment.csv_imported", principal=principal, ip=client_ip(request),
+                       changes={"ok": report.ok, "rows": report.rows, "bytes": len(body),
+                                "shipments_created": report.shipments_created,
+                                "events_inserted": report.events_inserted})  # fmt: skip
     await session.commit()
     if not report.ok:
         response.status_code = 422
@@ -176,8 +198,10 @@ async def import_shipments(
 
 
 @router.get("/shipments/{shipment_id}", response_model=ShipmentDetail, summary="Shipment details")
-async def get_shipment(session: Session, shipment_id: uuid.UUID) -> dict[str, Any]:
-    return await _detail_or_404(session, shipment_id)
+async def get_shipment(
+    principal: ReadPrincipal, session: Session, shipment_id: uuid.UUID
+) -> dict[str, Any]:
+    return await _detail_or_404(session, principal.organization_id, shipment_id)
 
 
 @router.post(
@@ -186,9 +210,10 @@ async def get_shipment(session: Session, shipment_id: uuid.UUID) -> dict[str, An
     summary="Refresh from carrier",
 )
 async def refresh_shipment(
-    session: Session, registry: Registry, shipment_id: uuid.UUID
+    principal: Writer, session: Session, registry: Registry, shipment_id: uuid.UUID
 ) -> dict[str, Any]:
-    detail = await _detail_or_404(session, shipment_id)
+    org = principal.organization_id
+    detail = await _detail_or_404(session, org, shipment_id)
     if not detail["refreshable"]:
         raise ApiError(
             409, "not_refreshable", "Imported shipments are updated by re-importing CSV data."
@@ -196,8 +221,8 @@ async def refresh_shipment(
     ref = TrackingReference(
         reference_type=detail["reference_type"], value=detail["reference_value"]
     )
-    await _track(session, registry, detail["carrier"]["code"], ref)
-    return await _detail_or_404(session, shipment_id)
+    await _track(session, registry, org, detail["carrier"]["code"], ref)
+    return await _detail_or_404(session, org, shipment_id)
 
 
 @router.get(
@@ -205,5 +230,5 @@ async def refresh_shipment(
     response_model=list[CarrierPerformance],
     summary="Carrier comparison: integration status, fleet, shipment reliability",
 )
-async def carriers_performance(session: Session) -> list[dict[str, Any]]:
-    return await queries.carrier_performance(session, await local_org_id(session))
+async def carriers_performance(principal: ReadPrincipal, session: Session) -> list[dict[str, Any]]:
+    return await queries.carrier_performance(session, principal.organization_id)

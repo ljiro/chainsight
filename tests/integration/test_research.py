@@ -217,8 +217,10 @@ def test_failed_run_is_recorded(migrated_db: Engine) -> None:
     )
 
 
-def test_research_api(migrated_db: Engine, research_data: dict[str, Any]) -> None:
-    with TestClient(create_app()) as c:
+def test_research_api(
+    migrated_db: Engine, research_data: dict[str, Any], auth_headers: dict[str, str]
+) -> None:
+    with TestClient(create_app(), headers=auth_headers) as c:
         ind = c.get("/api/v1/research/indicators").json()
         keys = {i["key"] for i in ind["indicators"]}
         assert "composite:hormuz_bab_tanker" in keys and "fred:TESTPRICE" in keys

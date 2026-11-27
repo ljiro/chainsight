@@ -90,8 +90,8 @@ def seeded(migrated_db: Engine, database_url: str) -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(seeded: dict[str, Any]) -> Iterator[TestClient]:
-    with TestClient(create_app()) as c:
+def client(seeded: dict[str, Any], auth_headers: dict[str, str]) -> Iterator[TestClient]:
+    with TestClient(create_app(), headers=auth_headers) as c:
         yield c
 
 

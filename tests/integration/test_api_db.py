@@ -11,8 +11,8 @@ from chainsight_api.main import create_app
 
 
 @pytest.fixture
-def client(migrated_db: Engine) -> Iterator[TestClient]:
-    with TestClient(create_app()) as c:
+def client(migrated_db: Engine, auth_headers: dict[str, str]) -> Iterator[TestClient]:
+    with TestClient(create_app(), headers=auth_headers) as c:
         yield c
 
 

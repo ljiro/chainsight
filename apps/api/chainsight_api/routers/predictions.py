@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from chainsight_api.auth import ReadPrincipal
 from core.timeutils import utcnow
 from database.session import session_scope
 from services import prediction_queries as pq
@@ -27,8 +28,8 @@ async def list_models(session: Session) -> list[dict[str, Any]]:
 
 
 @router.get("/predictions/summary", summary="Predictive intelligence KPIs")
-async def predictions_summary(session: Session) -> dict[str, Any]:
-    return await pq.summary(session, utcnow())
+async def predictions_summary(principal: ReadPrincipal, session: Session) -> dict[str, Any]:
+    return await pq.summary(session, principal.organization_id, utcnow())
 
 
 @router.get("/predictions/eta", summary="Latest ETA prediction per vessel (last 24 h)")
@@ -45,16 +46,18 @@ async def vessel_eta(session: Session, vessel_id: uuid.UUID) -> list[dict[str, A
 
 @router.get("/predictions/delay", summary="Latest delay probability per active shipment")
 async def delay_predictions(
-    session: Session, limit: Annotated[int, Query(ge=1, le=500)] = 100
+    principal: ReadPrincipal, session: Session, limit: Annotated[int, Query(ge=1, le=500)] = 100
 ) -> list[dict[str, Any]]:
-    return await pq.latest_delay(session, limit=limit)
+    return await pq.latest_delay(session, principal.organization_id, limit=limit)
 
 
 @router.get(
     "/shipments/{shipment_id}/delay-risk", summary="Delay probability history for a shipment"
 )
-async def shipment_delay_risk(session: Session, shipment_id: uuid.UUID) -> list[dict[str, Any]]:
-    return await pq.shipment_delay_history(session, shipment_id)
+async def shipment_delay_risk(
+    principal: ReadPrincipal, session: Session, shipment_id: uuid.UUID
+) -> list[dict[str, Any]]:
+    return await pq.shipment_delay_history(session, principal.organization_id, shipment_id)
 
 
 @router.get("/predictions/congestion", summary="Port congestion: current level and 24 h forecast")

@@ -11,7 +11,7 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator
+from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -114,6 +114,35 @@ class Settings(BaseSettings):
     research_history_start: str = "2019-01-01"
     eia_api_key: SecretStr | None = None
 
+    # Authentication (Phase 6). JWT_SECRET is required in production (>= 32 characters); in
+    # development and tests an ephemeral per-process secret is used, so restarts log users out.
+    jwt_secret: SecretStr | None = None
+    jwt_access_ttl_minutes: int = Field(default=15, ge=1, le=60)
+    auth_refresh_ttl_days: int = Field(default=14, ge=1, le=90)
+    # Secure cookies need HTTPS; defaults to on in production.
+    auth_cookie_secure: bool | None = None
+    # Creates the first owner (in the local organization) at startup if no user exists yet.
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: SecretStr | None = None
+
+    # Rate limiting (fixed one-minute windows in Redis). Fails open if Redis is unreachable.
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = Field(default=600, ge=1)
+    rate_limit_login_per_minute: int = Field(default=10, ge=1)
+    # Number of trusted reverse proxies in front of the API; X-Forwarded-For is ignored when 0.
+    trusted_proxy_count: int = Field(default=0, ge=0, le=5)
+
+    # Carrier push webhooks: JSON object {"<carrier code>": "<shared secret>"}.
+    carrier_webhook_secrets: SecretStr | None = None
+    webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
+
+    # Observability
+    metrics_enabled: bool = True
+    # Bearer token required on /metrics when set (recommended outside a private network).
+    metrics_token: SecretStr | None = None
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_service_name: str = "chainsight-api"
+
     @field_validator(
         "api_cors_origins",
         "weather_port_unlocodes",
@@ -147,6 +176,10 @@ class Settings(BaseSettings):
         "un_comtrade_api_key",
         "fred_api_key",
         "eia_api_key",
+        "jwt_secret",
+        "bootstrap_admin_password",
+        "carrier_webhook_secrets",
+        "metrics_token",
         mode="before",
     )
     @classmethod
@@ -155,6 +188,35 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator("bootstrap_admin_email", "otel_exporter_otlp_endpoint", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _production_requirements(self) -> Settings:
+        if not self.is_production:
+            return self
+        problems = []
+        secret = self.jwt_secret.get_secret_value() if self.jwt_secret else ""
+        if len(secret) < 32:
+            problems.append("JWT_SECRET must be set to at least 32 characters")
+        if self.database_url.hosts()[0].get("password") in ("chainsight", "change-me", None):
+            problems.append("DATABASE_URL must not use the default database password")
+        if self.auth_cookie_secure is False:
+            problems.append("AUTH_COOKIE_SECURE cannot be disabled in production")
+        if any(o.startswith("http://") and "localhost" not in o for o in self.api_cors_origins):
+            problems.append("API_CORS_ORIGINS must use https outside localhost")
+        if problems:
+            raise ValueError("unsafe production configuration: " + "; ".join(problems))
+        return self
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.is_production if self.auth_cookie_secure is None else self.auth_cookie_secure
 
     @property
     def is_production(self) -> bool:

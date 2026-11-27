@@ -25,7 +25,7 @@ from ml.eta_prediction import pipeline as eta
 from services.ingestion.port_registry import import_ports
 from services.ml_jobs import synthetic_delay_journeys
 from services.shipment_tracking.registry import CarrierRegistry
-from services.shipment_tracking.service import track
+from services.shipment_tracking.service import local_org_id, track
 
 NOW = datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
 CSV = """Change,Country,Location,Name,NameWoDiacritics,Subdivision,Status,Function,Date,IATA,Coordinates,Remarks
@@ -298,7 +298,7 @@ def test_synthetic_delay_model_only_scores_synthetic_shipments(
         registry = CarrierRegistry(adapters={"demo": DemoCarrierAdapter()})
         async with sm() as session, session.begin():
             for i in range(30):
-                await track(session, registry, carrier_code="demo",
+                await track(session, registry, org_id=await local_org_id(session), carrier_code="demo",
                             reference=TrackingReference(reference_type="booking", value=f"DEMOML{i:04d}"),
                             threshold_hours=12)  # fmt: skip
         await engine.dispose()
@@ -344,7 +344,7 @@ def test_congestion_observations_and_forecast(migrated_db: Engine, ml_env: None)
 
 
 def test_prediction_api_exposes_provenance_and_synthetic_flags(
-    migrated_db: Engine, ml_env: None
+    migrated_db: Engine, ml_env: None, auth_headers: dict[str, str]
 ) -> None:
     """Runs after the tests above (module order), so the DB holds ETA, delay, congestion
     predictions and anomaly alerts. Every row must carry model version and timing."""
@@ -352,7 +352,7 @@ def test_prediction_api_exposes_provenance_and_synthetic_flags(
 
     from chainsight_api.main import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), headers=auth_headers) as c:
         models = c.get("/api/v1/models").json()
         assert {m["model_name"] for m in models} >= {"eta", "delay", "congestion"}
         assert all("is_synthetic_trained" in m and "evaluations" in m for m in models)

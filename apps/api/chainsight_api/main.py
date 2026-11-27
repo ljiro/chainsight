@@ -5,17 +5,30 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from chainsight_api.auth import require
 from chainsight_api.errors import install_error_handlers
 from chainsight_api.health import close_redis
 from chainsight_api.middleware import install_middleware
-from chainsight_api.routers import catalog, fleet, health, live, predictions, research, shipments
+from chainsight_api.routers import (
+    auth,
+    catalog,
+    fleet,
+    health,
+    live,
+    org,
+    predictions,
+    research,
+    shipments,
+)
 from chainsight_api.schemas.common import ErrorResponse
 from core.logging_config import configure_logging, get_logger
 from core.settings import Settings, get_settings
 from database.session import get_async_engine, get_sessionmaker
+from services.auth.rbac import Permission
+from services.auth.service import ensure_bootstrap_owner
 from services.shipment_tracking.registry import build_registry, sync_integration_statuses
 
 API_V1_PREFIX = "/api/v1"
@@ -33,6 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("carrier_integrations_synced", statuses=statuses)
     except Exception as exc:
         log.warning("carrier_integrations_sync_skipped", error_type=type(exc).__name__)
+    try:
+        async with get_sessionmaker()() as session, session.begin():
+            await ensure_bootstrap_owner(session, settings)
+    except Exception as exc:
+        log.warning("bootstrap_owner_skipped", error_type=type(exc).__name__, error=str(exc))
     yield
     await close_redis()
     if get_async_engine.cache_info().currsize:
@@ -66,20 +84,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.api_cors_origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "X-API-Key",
+            "X-Requested-With",
+        ],
         expose_headers=["X-Request-ID"],
     )
     install_middleware(app)
     install_error_handlers(app)
 
+    # Public: health probes and sign-in. Everything else needs at least `data:read`; write
+    # endpoints add their own permission. The WebSocket authenticates itself (live.py).
     v1 = APIRouter(prefix=API_V1_PREFIX)
     v1.include_router(health.router)
-    v1.include_router(catalog.router)
-    v1.include_router(fleet.router)
+    v1.include_router(auth.router)
     v1.include_router(live.router)
-    v1.include_router(shipments.router)
-    v1.include_router(predictions.router)
-    v1.include_router(research.router)
+    readers = [Depends(require(Permission.DATA_READ))]
+    for module in (catalog, fleet, shipments, predictions, research):
+        v1.include_router(module.router, dependencies=readers)
+    v1.include_router(org.router)
     app.include_router(v1)
     return app
 

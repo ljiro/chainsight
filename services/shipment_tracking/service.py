@@ -56,7 +56,8 @@ class StoreOutcome:
 
 
 async def local_org_id(session: AsyncSession) -> uuid.UUID:
-    """Single-workspace mode until authentication (Phase 6) supplies the caller's org."""
+    """The default organization seeded by migration 0004 (CLI tools, seeds and tests). API
+    requests use the authenticated caller's organization instead."""
     org: uuid.UUID = (
         await session.execute(
             sa.text("SELECT id FROM organizations WHERE slug = :s"), {"s": LOCAL_ORG_SLUG}
@@ -332,6 +333,7 @@ async def track(
     session: AsyncSession,
     registry: CarrierRegistry,
     *,
+    org_id: uuid.UUID,
     carrier_code: str,
     reference: TrackingReference,
     threshold_hours: float,
@@ -361,7 +363,7 @@ async def track(
     source_id = await _source_id(session, source_key_for(adapter))
     outcome = await store_result(
         session,
-        org_id=await local_org_id(session),
+        org_id=org_id,
         carrier_id=carrier_id,
         reference=reference,
         events=result.events,

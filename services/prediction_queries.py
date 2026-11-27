@@ -100,27 +100,31 @@ JOIN model_versions m ON m.id = d.model_version_id
 """
 
 
-async def latest_delay(session: AsyncSession, *, limit: int) -> list[dict[str, Any]]:
+async def latest_delay(
+    session: AsyncSession, org_id: uuid.UUID, *, limit: int
+) -> list[dict[str, Any]]:
     rows = await session.execute(
         sa.text(
-            f"SELECT * FROM ({_DELAY_SELECT} WHERE s.actual_arrival_at IS NULL) x "
+            f"SELECT * FROM ({_DELAY_SELECT} WHERE s.actual_arrival_at IS NULL "
+            "AND s.organization_id = :org) x "
             "WHERE x.predicted_at = (SELECT max(predicted_at) FROM delay_predictions "
             "WHERE shipment_id = x.shipment_id) "
             "ORDER BY x.delay_probability DESC LIMIT :limit"
         ),
-        {"limit": limit},
+        {"limit": limit, "org": org_id},
     )
     return [dict(r._mapping) | {"factors": r.factors or []} for r in rows]
 
 
 async def shipment_delay_history(
-    session: AsyncSession, shipment_id: uuid.UUID, limit: int = 24
+    session: AsyncSession, org_id: uuid.UUID, shipment_id: uuid.UUID, limit: int = 24
 ) -> list[dict[str, Any]]:
     rows = await session.execute(
         sa.text(
-            f"{_DELAY_SELECT} WHERE d.shipment_id = :s ORDER BY d.predicted_at DESC LIMIT :limit"
+            f"{_DELAY_SELECT} WHERE d.shipment_id = :s AND s.organization_id = :org "
+            "ORDER BY d.predicted_at DESC LIMIT :limit"
         ),
-        {"s": shipment_id, "limit": limit},
+        {"s": shipment_id, "org": org_id, "limit": limit},
     )
     return [dict(r._mapping) | {"factors": r.factors or []} for r in rows]
 
@@ -207,7 +211,7 @@ async def anomalies(
     return [dict(r._mapping) | {"evidence": r.evidence or {}} for r in rows]
 
 
-async def summary(session: AsyncSession, now: datetime) -> dict[str, Any]:
+async def summary(session: AsyncSession, org_id: uuid.UUID, now: datetime) -> dict[str, Any]:
     r = (
         await session.execute(
             sa.text(
@@ -217,7 +221,8 @@ async def summary(session: AsyncSession, now: datetime) -> dict[str, Any]:
                      WHERE predicted_at > :day) AS eta_vessels,
                   (SELECT count(*) FROM (SELECT DISTINCT ON (shipment_id) delay_probability
                      FROM delay_predictions d JOIN shipments s ON s.id = d.shipment_id
-                     WHERE s.actual_arrival_at IS NULL ORDER BY shipment_id, predicted_at DESC) x
+                     WHERE s.actual_arrival_at IS NULL AND s.organization_id = :org
+                     ORDER BY shipment_id, predicted_at DESC) x
                      WHERE x.delay_probability >= :high) AS high_risk,
                   (SELECT bool_or(m.is_synthetic_trained) FROM model_versions m WHERE m.model_name = 'delay'
                      AND m.status = 'production') AS delay_model_synthetic,
@@ -228,7 +233,11 @@ async def summary(session: AsyncSession, now: datetime) -> dict[str, Any]:
                   (SELECT count(*) FROM eta_predictions WHERE actual_arrival_at IS NOT NULL) AS eta_resolved
                 """
             ),
-            {"day": now - timedelta(hours=24), "high": get_settings().delay_alert_probability},
+            {
+                "day": now - timedelta(hours=24),
+                "high": get_settings().delay_alert_probability,
+                "org": org_id,
+            },
         )
     ).one()
     return dict(r._mapping)

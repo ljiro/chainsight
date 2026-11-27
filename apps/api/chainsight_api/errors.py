@@ -67,7 +67,12 @@ def _code_for_status(status_code: int) -> str:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
-        return error_response(request, exc.status_code, exc.code, exc.message, exc.details)
+        response = error_response(request, exc.status_code, exc.code, exc.message, exc.details)
+        if exc.status_code == 429 and isinstance(exc.details, dict):
+            response.headers["Retry-After"] = str(exc.details.get("retry_after_seconds", 60))
+        if exc.status_code == 401:
+            response.headers["WWW-Authenticate"] = 'Bearer realm="chainsight"'
+        return response
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:

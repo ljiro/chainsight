@@ -8,7 +8,9 @@ from collections.abc import Awaitable, Callable
 import structlog
 from fastapi import FastAPI, Request, Response
 
-from chainsight_api.errors import REQUEST_ID_HEADER
+from chainsight_api import ratelimit
+from chainsight_api.auth import client_ip, settings_of
+from chainsight_api.errors import REQUEST_ID_HEADER, error_response
 from core.logging_config import get_logger
 
 log = get_logger("chainsight_api.access")
@@ -18,6 +20,28 @@ _VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 def install_middleware(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def ip_rate_limit(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # Registered first, so it runs inside request_context (request IDs are already set).
+        settings = settings_of(request)
+        path = request.url.path
+        if (
+            settings.rate_limit_enabled
+            and path.startswith("/api/v1/")
+            and not path.startswith("/api/v1/health")
+        ):
+            d = await ratelimit.hit(f"ip:{client_ip(request)}", settings.rate_limit_per_minute)
+            if not d.allowed:
+                response = error_response(
+                    request, 429, "rate_limited", "Too many requests; slow down",
+                    {"limit": d.limit, "retry_after_seconds": d.reset_in},
+                )  # fmt: skip
+                response.headers["Retry-After"] = str(d.reset_in)
+                return response
+        return await call_next(request)
+
     @app.middleware("http")
     async def request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import io
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -34,7 +35,7 @@ from integrations.carriers.dcsa import (
 from integrations.carriers.models import NormalizedEvent, TrackingReference
 from integrations.carriers.references import is_valid_container_number, normalize_reference
 from services.ingestion.sources import write_log
-from services.shipment_tracking.service import local_org_id, store_result
+from services.shipment_tracking.service import store_result
 
 REQUIRED = (
     "carrier_code",
@@ -177,7 +178,9 @@ def parse_rows(text: str, known_carriers: set[str]) -> tuple[list[_Row], list[Ro
     return rows, errors
 
 
-async def import_csv(session: AsyncSession, text: str, *, threshold_hours: float) -> ImportReport:
+async def import_csv(
+    session: AsyncSession, text: str, *, org_id: uuid.UUID, threshold_hours: float
+) -> ImportReport:
     started = utcnow()
     carriers = {
         r.code: r.id for r in await session.execute(sa.text("SELECT id, code FROM carriers"))
@@ -198,7 +201,6 @@ async def import_csv(session: AsyncSession, text: str, *, threshold_hours: float
     groups: dict[tuple[str, str, str], list[_Row]] = defaultdict(list)
     for row in rows:
         groups[(row.carrier_code, row.reference.reference_type, row.reference.value)].append(row)
-    org_id = await local_org_id(session)
     for (carrier, _, _), group in groups.items():
         origin = next((g.origin for g in group if g.origin), None)
         destination = next((g.destination for g in group if g.destination), None)

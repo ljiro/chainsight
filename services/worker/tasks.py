@@ -77,7 +77,8 @@ async def _refresh_shipments() -> dict[str, int]:
             due = (
                 await session.execute(
                     sa.text(
-                        "SELECT c.code, s.reference_type, s.reference_value FROM shipments s "
+                        "SELECT s.organization_id, c.code, s.reference_type, s.reference_value "
+                        "FROM shipments s "
                         "JOIN carriers c ON c.id = s.carrier_id JOIN data_sources ds ON ds.id = s.source_id "
                         "WHERE ds.key <> 'csv-import' AND s.status NOT IN ('delivered', 'unknown') "
                         "AND (s.last_refreshed_at IS NULL "
@@ -92,7 +93,8 @@ async def _refresh_shipments() -> dict[str, int]:
                     reference_type=row.reference_type, value=row.reference_value
                 )
                 try:
-                    await track(session, registry, carrier_code=row.code, reference=ref,
+                    await track(session, registry, org_id=row.organization_id,
+                                carrier_code=row.code, reference=ref,
                                 threshold_hours=s.shipment_delay_threshold_hours)  # fmt: skip
                     await session.commit()
                     refreshed += 1

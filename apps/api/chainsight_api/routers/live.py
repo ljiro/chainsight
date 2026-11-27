@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
+from chainsight_api.auth import websocket_principal
 from chainsight_api.health import get_redis
 from core.logging_config import get_logger
 from core.settings import get_settings
@@ -51,6 +52,9 @@ async def positions(ws: WebSocket, bbox: str | None = None) -> None:
     if origin is not None and origin not in get_settings().api_cors_origins:
         # Browsers always send Origin; reject cross-site pages. Non-browser clients omit it.
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if await websocket_principal(ws) is None:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="not authenticated")
         return
     try:
         current = _parse_bbox(bbox)

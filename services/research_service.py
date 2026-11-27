@@ -25,7 +25,6 @@ from ml.quant_research.features import (
     market_prices,
 )
 from ml.quant_research.pit import known_at
-from services.research_jobs import local_org
 
 ALIGNMENT_NOTE = (
     "x is the feature value known at each decision time (00:00 UTC the day after the period "
@@ -156,7 +155,7 @@ _RUN_SUMMARY = """
 """
 
 
-def experiments(conn: Connection) -> list[dict[str, Any]]:
+def experiments(conn: Connection, org_id: uuid.UUID) -> list[dict[str, Any]]:
     rows = conn.execute(
         sa.text(
             f"""
@@ -164,17 +163,21 @@ def experiments(conn: Connection) -> list[dict[str, Any]]:
                    (SELECT count(*) FROM backtest_runs r WHERE r.experiment_id = e.id) AS n_runs,
                    (SELECT to_jsonb(x) FROM ({_RUN_SUMMARY} WHERE r.experiment_id = e.id
                       ORDER BY r.started_at DESC LIMIT 1) x) AS latest_run
-            FROM research_experiments e ORDER BY e.created_at DESC
+            FROM research_experiments e WHERE e.organization_id = :org ORDER BY e.created_at DESC
             """
-        )
+        ),
+        {"org": org_id},
     ).all()
     return [dict(r._mapping) for r in rows]
 
 
-def experiment_detail(conn: Connection, experiment_id: uuid.UUID) -> dict[str, Any]:
+def experiment_detail(
+    conn: Connection, org_id: uuid.UUID, experiment_id: uuid.UUID
+) -> dict[str, Any]:
     e = conn.execute(
         sa.text("SELECT id, name, hypothesis, config, status, created_at, updated_at "
-                "FROM research_experiments WHERE id = :e"), {"e": experiment_id},
+                "FROM research_experiments WHERE id = :e AND organization_id = :org"),
+        {"e": experiment_id, "org": org_id},
     ).one_or_none()  # fmt: skip
     if e is None:
         raise NotFound("experiment not found")
@@ -191,7 +194,7 @@ def experiment_detail(conn: Connection, experiment_id: uuid.UUID) -> dict[str, A
 
 
 def create_and_run(
-    engine: Engine, *, name: str, hypothesis: str, config: dict[str, Any]
+    engine: Engine, org_id: uuid.UUID, *, name: str, hypothesis: str, config: dict[str, Any]
 ) -> dict[str, Any]:
     cfg = ExperimentConfig(**config)
     cfg.validate()
@@ -202,21 +205,20 @@ def create_and_run(
         ).scalar()
     if not exists:
         raise ValueError(f"unknown market series {cfg.asset!r}")
-    org = local_org(engine)
     with engine.begin() as conn:
-        eid = create_experiment(conn, org, name=name, hypothesis=hypothesis, config=cfg)
-    return rerun(engine, eid)
+        eid = create_experiment(conn, org_id, name=name, hypothesis=hypothesis, config=cfg)
+    return rerun(engine, org_id, eid)
 
 
-def rerun(engine: Engine, experiment_id: uuid.UUID) -> dict[str, Any]:
+def rerun(engine: Engine, org_id: uuid.UUID, experiment_id: uuid.UUID) -> dict[str, Any]:
     with engine.connect() as conn:
-        experiment_detail(conn, experiment_id)  # 404 before creating a run
+        experiment_detail(conn, org_id, experiment_id)  # 404 before creating a run
     try:
         run_experiment(engine, experiment_id)
     except Exception:  # noqa: S110 - the failure is recorded on the run and returned below
         pass
     with engine.connect() as conn:
-        return experiment_detail(conn, experiment_id)
+        return experiment_detail(conn, org_id, experiment_id)
 
 
 _LATEST_RUNS = """
@@ -226,18 +228,18 @@ _LATEST_RUNS = """
            (SELECT jsonb_object_agg(m.metric, m.value) FROM backtest_metrics m
              WHERE m.backtest_run_id = r.id AND m.split = 'out_of_sample') AS oos
     FROM research_experiments e JOIN backtest_runs r ON r.experiment_id = e.id
-    WHERE r.status = 'succeeded'
+    WHERE r.status = 'succeeded' AND e.organization_id = :org
     ORDER BY e.id, r.finished_at DESC
 """
 
 
-def multiple_testing(conn: Connection) -> dict[str, Any]:
+def multiple_testing(conn: Connection, org_id: uuid.UUID) -> dict[str, Any]:
     """Deflated Sharpe ratios and FDR-adjusted p-values across every experiment's latest run.
 
     The trial count is every grid configuration searched by every experiment; the trial
     variance pools those configurations' full-sample per-period Sharpe ratios.
     """
-    rows = [dict(r._mapping) for r in conn.execute(sa.text(_LATEST_RUNS)).all()]
+    rows = [dict(r._mapping) for r in conn.execute(sa.text(_LATEST_RUNS), {"org": org_id}).all()]
     n_trials = sum(r["n_configs"] or 1 for r in rows)
     pooled = [float(v) for r in rows for v in (r["trial_sharpes"] or [])]
     trial_var = float(np.var(pooled, ddof=1)) if len(pooled) > 1 else None

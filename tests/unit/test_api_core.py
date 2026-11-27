@@ -94,12 +94,28 @@ def test_not_found_uses_error_envelope(client: TestClient) -> None:
 
 
 def test_validation_error_envelope(client: TestClient) -> None:
-    # Validation happens before the DB dependency is used.
-    r = client.get("/api/v1/data-sources", params={"limit": 0})
+    # Body validation happens before the DB dependency is used.
+    r = client.post("/api/v1/auth/login", json={"email": "a@b.co"})
     assert r.status_code == 422
     err = r.json()["error"]
     assert err["code"] == "validation_error"
-    assert any("limit" in d["loc"] for d in err["details"])
+    assert any("password" in d["loc"] for d in err["details"])
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/data-sources", "/api/v1/fleet/positions", "/api/v1/shipments",
+             "/api/v1/research/experiments", "/api/v1/org/members", "/api/v1/auth/me"],
+)  # fmt: skip
+def test_data_endpoints_require_authentication(client: TestClient, path: str) -> None:
+    r = client.get(path)
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "not_authenticated"
+    assert r.headers["WWW-Authenticate"].startswith("Bearer")
+
+
+def test_malformed_tokens_are_rejected_without_a_database(client: TestClient) -> None:
+    r = client.get("/api/v1/shipments", headers={"Authorization": "Bearer not-a-jwt"})
+    assert r.status_code == 401 and r.json()["error"]["code"] == "invalid_token"
 
 
 def test_unhandled_error_does_not_leak_internals(client: TestClient) -> None:

@@ -74,3 +74,36 @@ def migrated_db(alembic_config: Config, database_url: str) -> Iterator[Engine]:
     engine = sa.create_engine(database_url)
     yield engine
     engine.dispose()
+
+
+_ADMIN_KEY: tuple[str, str, str] | None = None
+
+
+@pytest.fixture
+def admin_api_key(migrated_db: Engine) -> str:
+    """An admin-scoped API key in the local organization, for tests of data endpoints.
+    Re-inserted when missing: the migration round-trip test recreates every table."""
+    from database.enums import MemberRole
+    from services.auth import crypto
+    from services.auth.rbac import ROLE_PERMISSIONS
+
+    global _ADMIN_KEY
+    if _ADMIN_KEY is None:
+        _ADMIN_KEY = crypto.new_api_key()
+    key, prefix, key_hash = _ADMIN_KEY
+    scopes = sorted(p.value for p in ROLE_PERMISSIONS[MemberRole.ADMIN])
+    with migrated_db.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO api_keys (organization_id, name, key_prefix, key_hash, scopes) "
+                "SELECT id, 'integration tests', :p, :h, :s FROM organizations WHERE slug = 'local' "
+                "ON CONFLICT (key_prefix) DO NOTHING"
+            ),
+            {"p": prefix, "h": key_hash, "s": scopes},
+        )
+    return key
+
+
+@pytest.fixture
+def auth_headers(admin_api_key: str) -> dict[str, str]:
+    return {"X-API-Key": admin_api_key}

@@ -18,7 +18,7 @@ from integrations.carriers.dcsa import DcsaAuth, DcsaCarrierConfig, DcsaTntAdapt
 from integrations.carriers.demo import DemoCarrierAdapter, journey_for
 from integrations.carriers.models import TrackingReference
 from services.shipment_tracking.registry import CarrierRegistry, sync_integration_statuses
-from services.shipment_tracking.service import track
+from services.shipment_tracking.service import local_org_id, track
 
 IMO = 9811000  # a tracked vessel will be created with this IMO
 
@@ -45,8 +45,8 @@ def tracked_vessel(migrated_db: Engine) -> str:
 
 
 @pytest.fixture
-def client(migrated_db: Engine) -> Iterator[TestClient]:
-    with TestClient(create_app()) as c:
+def client(migrated_db: Engine, auth_headers: dict[str, str]) -> Iterator[TestClient]:
+    with TestClient(create_app(), headers=auth_headers) as c:
         yield c
 
 
@@ -116,7 +116,12 @@ async def test_new_estimates_append_and_baseline_is_write_once(
             registry = CarrierRegistry(adapters={"demo": DemoCarrierAdapter(clock=lambda t=t: t)})
             async with sm() as session, session.begin():
                 await track(
-                    session, registry, carrier_code="demo", reference=ref, threshold_hours=12
+                    session,
+                    registry,
+                    org_id=await local_org_id(session),
+                    carrier_code="demo",
+                    reference=ref,
+                    threshold_hours=12,
                 )
     finally:
         await engine.dispose()

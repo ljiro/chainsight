@@ -10,18 +10,29 @@ import uuid
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.engine import Connection
 from starlette.concurrency import run_in_threadpool
 
+from chainsight_api.auth import ReadPrincipal, client_ip, require
 from chainsight_api.errors import ApiError
-from database.session import get_sync_engine
+from database.session import get_sessionmaker, get_sync_engine
 from ml.quant_research.features import FeatureError
 from ml.quant_research.stats import InsufficientData
+from services import audit
 from services import research_service as rs
+from services.auth.rbac import Permission
+from services.auth.service import Principal
 
 router = APIRouter(prefix="/research", tags=["research"])
+Writer = Annotated[Principal, Depends(require(Permission.RESEARCH_WRITE))]
+
+
+async def _audit(request: Request, principal: Principal, action: str, eid: Any) -> None:
+    async with get_sessionmaker()() as session, session.begin():
+        await audit.record(session, action, principal=principal, entity_type="research_experiment",
+                           entity_id=eid, ip=client_ip(request))  # fmt: skip
 
 
 async def _read[T](fn: Callable[[Connection], T]) -> T:
@@ -87,16 +98,16 @@ async def importance(body: ImportanceRequest) -> dict[str, Any]:
 
 
 @router.get("/experiments", summary="Research experiments with their latest backtest summary")
-async def experiments() -> list[dict[str, Any]]:
-    return await _read(rs.experiments)
+async def experiments(principal: ReadPrincipal) -> list[dict[str, Any]]:
+    return await _read(lambda c: rs.experiments(c, principal.organization_id))
 
 
 @router.get(
     "/experiments/multiple-testing",
     summary="Deflated Sharpe ratios and FDR-adjusted p-values across all experiments",
 )
-async def multiple_testing() -> dict[str, Any]:
-    return await _read(rs.multiple_testing)
+async def multiple_testing(principal: ReadPrincipal) -> dict[str, Any]:
+    return await _read(lambda c: rs.multiple_testing(c, principal.organization_id))
 
 
 class ExperimentRequest(BaseModel):
@@ -108,17 +119,25 @@ class ExperimentRequest(BaseModel):
 
 
 @router.post("/experiments", status_code=201, summary="Create an experiment and run its backtest")
-async def create_experiment(body: ExperimentRequest) -> dict[str, Any]:
-    return await _guard(lambda: rs.create_and_run(get_sync_engine(), **body.model_dump()))
+async def create_experiment(
+    request: Request, principal: Writer, body: ExperimentRequest
+) -> dict[str, Any]:
+    org = principal.organization_id
+    detail = await _guard(lambda: rs.create_and_run(get_sync_engine(), org, **body.model_dump()))
+    await _audit(request, principal, "experiment.created", detail["id"])
+    return detail
 
 
 @router.get(
     "/experiments/{experiment_id}", summary="Experiment with runs, metrics, folds and equity"
 )
-async def experiment(experiment_id: uuid.UUID) -> dict[str, Any]:
-    return await _read(lambda c: rs.experiment_detail(c, experiment_id))
+async def experiment(principal: ReadPrincipal, experiment_id: uuid.UUID) -> dict[str, Any]:
+    return await _read(lambda c: rs.experiment_detail(c, principal.organization_id, experiment_id))
 
 
 @router.post("/experiments/{experiment_id}/runs", summary="Re-run an experiment's backtest")
-async def rerun(experiment_id: uuid.UUID) -> dict[str, Any]:
-    return await _guard(lambda: rs.rerun(get_sync_engine(), experiment_id))
+async def rerun(request: Request, principal: Writer, experiment_id: uuid.UUID) -> dict[str, Any]:
+    org = principal.organization_id
+    detail = await _guard(lambda: rs.rerun(get_sync_engine(), org, experiment_id))
+    await _audit(request, principal, "experiment.run", experiment_id)
+    return detail
