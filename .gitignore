@@ -41,3 +41,6 @@ coverage/
 data/models/
 data/mlflow.db
 mlflow.db
+
+# Local database backups (docker compose --profile backup)
+backups/

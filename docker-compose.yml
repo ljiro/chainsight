@@ -134,6 +134,31 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- backups (opt-in): docker compose --profile backup up -d -------------------------
+  # Daily pg_dump at BACKUP_AT (UTC) into ./backups; see docs/operations/backups.md.
+  backup:
+    image: timescale/timescaledb-ha:pg16
+    profiles: ["backup"]
+    entrypoint: ["/scripts/run-scheduled.sh"]
+    user: root
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-chainsight}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-chainsight}
+      PGDATABASE: ${POSTGRES_DB:-chainsight}
+      BACKUP_DIR: /backups
+      BACKUP_AT: ${BACKUP_AT:-02:30}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+    volumes:
+      - ./infrastructure/backup:/scripts:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   # --- monitoring (opt-in): docker compose --profile monitoring up -d -------------------
   prometheus:
     image: prom/prometheus:v3.1.0
