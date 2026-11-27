@@ -113,6 +113,28 @@ Nothing is marked `[x]` unless it has been executed and tested.
 - [x] `/settings`: organization, account/password, members & roles, API keys, carrier integrations, source health, audit log
 - [x] Phase 5 follow-up: deflated Sharpe ratio + Benjamini–Hochberg across experiments
 - [x] Tests: backend 330 (unit + integration incl. auth flows, RBAC, isolation, webhooks, audit trigger, rate limits, metrics); frontend 102; E2E 7
-- [ ] Generate frontend types from OpenAPI (`apps/web/src/lib/types.ts`) — *deferred: most research/prediction endpoints return untyped dicts, so generated types would add little until response models exist*
-- [ ] MFA / SSO, email invitations and self-service password reset — *needs an email provider / IdP*
-- [ ] Alert routing (Alertmanager) — *deployment-specific*
+- [ ] Generate frontend types from OpenAPI → moved to Phase 8
+- [ ] MFA / SSO, email invitations and self-service password reset → moved to Phase 8
+- [x] Alert routing (Alertmanager) → done in Phase 7
+
+## Phase 7 — Go-live readiness
+Operator steps: [docs/operations/launch-checklist.md](docs/operations/launch-checklist.md)
+- [x] Alertmanager: receivers (webhook / Slack / email) rendered from the environment, grouping, repeat intervals, inhibition of warnings by "target down"; in dev and production `--profile monitoring` — **firing + resolved delivery verified to a webhook sink**
+- [x] Production compose `--profile monitoring` (Prometheus, Alertmanager, Grafana on loopback; METRICS_TOKEN passed to Prometheus automatically) — **verified in the local production drill**
+- [x] `make preflight` (`infrastructure/deployment/preflight.sh`): env file permissions/tracking, placeholders, secret strength, pinned version, provider keys, monitoring, DNS, ports — never prints secrets; tested on macOS sh, busybox and dash
+- [x] `make verify URL=…` (`infrastructure/deployment/verify.sh`): health, readiness, auth required, `/metrics` hidden, HTTPS redirect, trusted cert, security headers, generic sign-in error — **12/12 against the drill**
+- [x] `python -m services.auth revoke-sessions --email … | --all` for incident response (JWT rotation alone does not end refresh sessions); audited per org; integration tested
+- [x] CI `infra` job: shellcheck, both compose files, promtool (rules + config), amtool (all receivers)
+- [x] Fix: `infrastructure/deployment/.env.production.example` was gitignored by `.env.*` and never committed
+- [x] Launch checklist: GitHub/images, accounts and credentials, host, first deployment, day one, first week, ongoing
+- [ ] Push; CI and the Images workflow green on GitHub — *needs your go-ahead*
+- [ ] Public deployment — *needs a host, domain and credentials (launch checklist §2–4)*
+
+## Phase 8 — Typed contracts, accounts and data-dependent models (planned)
+- [ ] Pydantic response models for the ~49 endpoints that return untyped dicts; generate `apps/web/src/lib/types.ts` from OpenAPI with a CI drift check
+- [ ] Email provider integration → invitations and self-service password reset; then TOTP MFA; then OIDC SSO
+- [ ] Congestion gradient boosting on lags — *unblocked once ~4–6 weeks of hourly congestion history exists in production*
+- [ ] ETA beyond final approach — *unblocked once AIS history covers full voyages*
+- [ ] Delay model — *needs real carrier arrivals (carrier credentials or customer CSV history)*
+- [ ] Real carrier integration — *needs carrier API credentials*
+- [ ] UN Comtrade / EIA collectors — *optional; need API keys*

@@ -130,6 +130,9 @@ Secrets and passwords are never written to `changes`.
   CORS origin.
 - In development an unset `JWT_SECRET` gives a random per-process secret (with a warning):
   sessions end when the API restarts.
+- Rotating `JWT_SECRET` only expires access tokens; refresh cookies would keep issuing new
+  ones. After a suspected leak, also run `python -m services.auth revoke-sessions --all` (or
+  `--email`). It revokes every refresh session at once and audits it in each affected org.
 - `/metrics` is served outside `/api/v1`, so neither the web proxy nor Caddy exposes it. Set
   `METRICS_TOKEN` if the API port is reachable by anyone other than Prometheus.
 

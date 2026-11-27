@@ -36,6 +36,9 @@ Only Caddy publishes ports. It gets and renews a Let's Encrypt certificate for
 
 ## First deployment
 
+The full go-live sequence (GitHub, accounts, host, day one, first week) is in the
+[launch checklist](launch-checklist.md). The essentials:
+
 1. Point the domain's DNS at the host. Open 80/tcp (ACME) and 443/tcp+udp.
 2. Create the environment file in the repository root (it is gitignored):
    ```bash
@@ -44,14 +47,27 @@ Only Caddy publishes ports. It gets and renews a Let's Encrypt certificate for
    python -c "import secrets; print(secrets.token_urlsafe(32))"   # POSTGRES_PASSWORD
    ```
    Fill in the domain, ACME email, image owner and version, the two secrets, and
-   `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`.
+   `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`. For monitoring, also set
+   `GRAFANA_ADMIN_PASSWORD` and an alert receiver ([observability.md](observability.md#alert-routing-alertmanager)).
+   Then run `make preflight` (`infrastructure/deployment/preflight.sh`). It checks file
+   permissions, placeholders, secret strength, a pinned version, provider keys, DNS and free
+   ports, and exits non-zero on any FAIL. It never prints secret values.
 3. Start it. The same file feeds compose interpolation (`--env-file`) and the containers
-   (`env_file`):
+   (`env_file`). The `monitoring` profile adds Prometheus, Alertmanager and Grafana on
+   127.0.0.1:
    ```bash
-   docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.production up -d
+   docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.production \
+     --profile monitoring up -d
    ```
    `migrate` applies migrations and seeds the port registry, then the API starts. The API
    **refuses to start** with unsafe production settings; check `docker compose logs api`.
+   From another machine, run `make verify URL=https://<domain>`
+   (`infrastructure/deployment/verify.sh`). It checks:
+   - health and readiness;
+   - that data routes require authentication and `/metrics` is not exposed;
+   - the HTTP→HTTPS redirect and a trusted certificate;
+   - the security headers and that no `Server` header is sent;
+   - the generic sign-in error.
 4. Sign in at `https://<domain>/login` as the bootstrap owner. Then remove the
    `BOOTSTRAP_ADMIN_*` values from `.env.production`. They are only used while no user
    exists, but they should not linger.
@@ -68,6 +84,11 @@ Verified on 27 Nov 2026 by running this exact compose file with locally built im
 - `/metrics` was not reachable from outside.
 - The API rejected a short `JWT_SECRET`.
 - Metrics aggregated across both uvicorn workers.
+
+Repeated the same day with `--profile monitoring`:
+- `verify.sh` passed 12/12;
+- every Prometheus target was up, and Prometheus was connected to Alertmanager;
+- Grafana provisioned the dashboard, and the default `admin/admin` login was refused.
 
 ## Upgrades and rollback
 
@@ -96,11 +117,14 @@ docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .
 
 ## Operations checklist
 
+The complete list is in the [launch checklist](launch-checklist.md); the essentials:
+
 - [ ] `.env.production` readable only by the deploy user (`chmod 600`)
 - [ ] `JWT_SECRET` and `POSTGRES_PASSWORD` generated, not reused
 - [ ] Bootstrap credentials removed after the first sign-in
 - [ ] Backups copied off-host; restore drill done
-- [ ] Monitoring: Prometheus scrapes `api:8000/metrics` (set `METRICS_TOKEN` if exposed),
-      `worker:9808` and `ais-consumer:9809`; alert rules loaded ([observability.md](observability.md))
+- [ ] `make preflight` clean before starting; `make verify URL=...` clean afterwards
+- [ ] `--profile monitoring` running, a receiver configured, and a test alert received
+      ([observability.md](observability.md#alert-routing-alertmanager))
 - [ ] Provider keys set (`AISSTREAM_API_KEY`, carrier credentials, `FRED_API_KEY`), and
       statuses checked in Settings

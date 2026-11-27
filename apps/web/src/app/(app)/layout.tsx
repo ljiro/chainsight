@@ -12,7 +12,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <header className="flex h-14 items-center justify-between gap-3 border-b bg-card/60 px-4 backdrop-blur md:px-6">
           <MobileNav />
           <div className="hidden items-center gap-2 md:flex">
-            <Badge tone="info">Phase 6 · Production hardening</Badge>
+            <Badge tone="info">Phase 7 · Go-live readiness</Badge>
           </div>
           <div className="flex items-center gap-2">
             <UserMenu />

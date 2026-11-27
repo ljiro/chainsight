@@ -73,6 +73,19 @@ See [security model](security.md), [deployment](../operations/deployment.md),
 - Backups (pgBackRest or scheduled `pg_dump`), a restore runbook, and deployment config. CI/CD image publishing.
 - Playwright end-to-end smoke tests.
 
+### Phase 7: Go-live readiness ✅
+See the [launch checklist](../operations/launch-checklist.md).
+- Alertmanager routing (webhook, Slack, email) and monitoring in the production compose.
+- Preflight and post-deploy verification scripts, CI validation of infrastructure config.
+- Incident-response session revocation.
+- Remaining: push, green CI on GitHub, and a public deployment (operator steps).
+
+### Phase 8: Typed contracts, accounts and data-dependent models (planned)
+- Response models for every endpoint and OpenAPI-generated frontend types.
+- Email-backed invitations and password reset, then MFA and SSO.
+- Models that need production history: congestion GBM, long-range ETA, delay (needs real
+  carrier arrivals).
+
 ## External credentials checklist
 
 | Needed for | Variable | Required? |

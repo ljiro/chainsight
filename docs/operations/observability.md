@@ -42,7 +42,12 @@ Grafana provisions the Prometheus datasource and the **ChainSight overview** das
 - Celery tasks and durations;
 - AIS throughput, rejection reasons and ingestion lag.
 
-Both services bind to 127.0.0.1 only.
+Alertmanager (http://localhost:9093) is part of the same profile. All three bind to
+127.0.0.1 only. In production the same services run with
+`docker compose -f infrastructure/deployment/docker-compose.prod.yml ... --profile monitoring`.
+Reach them over an SSH tunnel ([launch checklist](launch-checklist.md#5-day-one)). If
+`METRICS_TOKEN` is set, Prometheus sends it to the API automatically
+(`prometheus-entrypoint.sh`).
 
 Alert rules (`infrastructure/monitoring/alerts.yml`, visible under Prometheus â†’ Alerts):
 
@@ -55,8 +60,36 @@ Alert rules (`infrastructure/monitoring/alerts.yml`, visible under Prometheus â†
 | AIS ingestion stalled | No ingestion window for 10 min |
 | Celery failures | A task fails more than 3 times in an hour |
 
-Routing alerts to people (Alertmanager, PagerDuty and so on) is deployment-specific and not
-included.
+### Alert routing (Alertmanager)
+
+Prometheus sends alerts to Alertmanager. Alertmanager's config is rendered at start from the
+environment (`infrastructure/monitoring/alertmanager/entrypoint.sh`), so destinations stay out
+of the repository. Each receiver is enabled when its variables are set, and several can be
+combined:
+
+| Receiver | Variables |
+|---|---|
+| Generic JSON webhook (ntfy, n8n, an incident tool) | `ALERT_WEBHOOK_URL` |
+| Slack incoming webhook | `ALERT_SLACK_WEBHOOK_URL` |
+| Email | `ALERT_EMAIL_TO`, `ALERT_SMTP_SMARTHOST` (`host:port`), `ALERT_SMTP_FROM`, optional `ALERT_SMTP_USERNAME` / `ALERT_SMTP_PASSWORD` |
+
+Routing:
+- Alerts are grouped by alert name and job.
+- Warnings repeat every 4 h and critical alerts every hour, with resolved notifications sent.
+- "Target down" suppresses the warnings it would cause for the same outage.
+- With no receiver set, alerts still show in Prometheus and Alertmanager but are not
+  delivered (the container logs a warning).
+
+Send a test alert:
+
+```bash
+docker compose exec alertmanager amtool alert add ChainSightTestAlert severity=warning \
+  --annotation='summary="Test"' --alertmanager.url=http://localhost:9093
+```
+
+Verified on 27 Nov 2026: stopping the AIS consumer delivered "ChainSightTargetDown" to a
+webhook receiver, and restarting it delivered the resolved notification. CI checks the
+rendered config with `amtool` and the rules with `promtool`.
 
 Data freshness also has its own in-app path: the beat task `ingest.check_freshness` raises
 deduplicated `system_alerts`, which the dashboard shows.
