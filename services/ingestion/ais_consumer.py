@@ -25,6 +25,7 @@ from database.session import get_async_engine, get_sessionmaker
 from integrations.ais.providers import AisProvider, AisStreamProvider, RawAisMessage, ReplayProvider
 from integrations.ais.simulator import SimulatorProvider
 from services.ingestion.ais_pipeline import LIVE_CHANNEL, AisPipeline
+from services.observability import configure_tracing, serve_ais_metrics
 
 log = get_logger(__name__)
 
@@ -130,6 +131,7 @@ async def run(settings: Settings, stop: asyncio.Event) -> None:
 def main() -> int:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
+    configure_tracing(settings, "chainsight-ais-consumer")
     stop = asyncio.Event()
 
     async def _main() -> None:
@@ -141,6 +143,7 @@ def main() -> int:
     if settings.ais_provider is AisProviderSetting.DISABLED:
         log.info("ais_consumer_disabled", hint="set AIS_PROVIDER to simulator, aisstream or replay")
         return 0
+    serve_ais_metrics(settings)
     try:
         asyncio.run(_main())
     except ProviderNotConfigured as exc:

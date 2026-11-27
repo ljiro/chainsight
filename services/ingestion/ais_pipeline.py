@@ -24,6 +24,7 @@ from integrations.ais.messages import AisPositionReport, AisRejected, AisStaticR
 from integrations.ais.providers import RawAisMessage
 from services.fleet_tracking.port_calls import Fix, process_port_calls
 from services.ingestion.sources import mark_error, mark_success, source_info, write_log
+from services.observability import observe_ais_window
 from services.vessel_registry.quality import quality_flags
 from services.vessel_registry.resolution import VesselState, apply_static_reports, resolve_vessels
 
@@ -420,6 +421,7 @@ class AisPipeline:
                 await mark_error(session, self.source_id, w.last_error or "flush failed")
             elif w.accepted or w.statics:
                 await mark_success(session, self.source_id, now)
+        observe_ais_window(self.source_key, w)
         log.info(
             "ais_window",
             source=self.source_key,

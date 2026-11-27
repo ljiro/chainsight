@@ -20,6 +20,7 @@ from chainsight_api.auth import (
     settings_of,
 )
 from chainsight_api.errors import ApiError
+from chainsight_api.metrics import AUTH_EVENTS, RATE_LIMITED
 from core.timeutils import utcnow
 from database.session import session_scope
 from services import audit
@@ -108,6 +109,7 @@ async def login(
         for bucket in buckets:
             d = await ratelimit.hit(bucket, settings.rate_limit_login_per_minute)
             if not d.allowed:
+                RATE_LIMITED.labels("login").inc()
                 raise ApiError(
                     429, "rate_limited", "Too many sign-in attempts; wait a minute",
                     {"retry_after_seconds": d.reset_in},
@@ -119,10 +121,12 @@ async def login(
             org_slug=body.organization, ip=ip, user_agent=ua,
         )  # fmt: skip
     except auth.AuthError as exc:
+        AUTH_EVENTS.labels("login_failed").inc()
         await audit.record(session, "auth.login_failed", ip=ip, user_agent=ua,
                            changes={"email_hash": crypto.sha256_hex(body.email.strip().lower())})  # fmt: skip
         await session.commit()
         raise ApiError(401, exc.code, exc.message) from exc
+    AUTH_EVENTS.labels("login").inc()
     await audit.record(
         session, "auth.login", organization_id=issued.organization_id, user_id=issued.user_id,
         entity_type="auth_session", entity_id=issued.session_id, ip=ip, user_agent=ua,
@@ -142,6 +146,7 @@ async def refresh(request: Request, response: Response, session: Session) -> dic
             session, settings_of(request), refresh_token=token, now=utcnow()
         )
     except auth.AuthError as exc:
+        AUTH_EVENTS.labels("refresh_failed").inc()
         await session.commit()
         _clear_cookies(request, response)
         raise ApiError(401, exc.code, exc.message) from exc

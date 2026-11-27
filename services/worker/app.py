@@ -10,10 +10,17 @@ from typing import Any
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import setup_logging
+from celery.signals import (
+    setup_logging,
+    task_postrun,
+    task_prerun,
+    worker_init,
+    worker_process_init,
+)
 
 from core.logging_config import configure_logging
 from core.settings import get_settings
+from services import observability
 
 
 @setup_logging.connect  # type: ignore[untyped-decorator]  # celery is untyped
@@ -21,6 +28,31 @@ def _configure_worker_logging(**_: Any) -> None:
     # Replaces Celery's logging setup so worker/beat logs match the API's structured format.
     s = get_settings()
     configure_logging(s.log_level, s.log_format)
+
+
+@worker_init.connect  # type: ignore[untyped-decorator]
+def _serve_metrics(**_: Any) -> None:
+    observability.serve_worker_metrics(get_settings())
+
+
+@worker_process_init.connect  # type: ignore[untyped-decorator]
+def _init_tracing(**_: Any) -> None:
+    # Per child process: exporters and their threads do not survive fork.
+    if observability.configure_tracing(get_settings(), "chainsight-worker"):
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+
+        CeleryInstrumentor().instrument()  # type: ignore[no-untyped-call]
+
+
+@task_prerun.connect  # type: ignore[untyped-decorator]
+def _task_prerun(task_id: str, **_: Any) -> None:
+    observability.task_started(task_id)
+
+
+@task_postrun.connect  # type: ignore[untyped-decorator]
+def _task_postrun(task_id: str, task: Any, state: str | None = None, **_: Any) -> None:
+    # Fires for successes and failures alike (state SUCCESS / FAILURE / RETRY).
+    observability.task_finished(task_id, task.name, state or "UNKNOWN")
 
 
 def create_celery() -> Celery:

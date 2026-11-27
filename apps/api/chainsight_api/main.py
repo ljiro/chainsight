@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from chainsight_api.auth import require
 from chainsight_api.errors import install_error_handlers
 from chainsight_api.health import close_redis
+from chainsight_api.metrics import install_metrics
 from chainsight_api.middleware import install_middleware
 from chainsight_api.routers import (
     auth,
@@ -30,6 +31,7 @@ from core.settings import Settings, get_settings
 from database.session import get_async_engine, get_sessionmaker
 from services.auth.rbac import Permission
 from services.auth.service import ensure_bootstrap_owner
+from services.observability import configure_tracing
 from services.shipment_tracking.registry import build_registry, sync_integration_statuses
 
 API_V1_PREFIX = "/api/v1"
@@ -95,6 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
     install_middleware(app)
+    install_metrics(app, settings)  # outermost: times everything, including rate-limited calls
     install_error_handlers(app)
 
     # Public: health probes and sign-in. Everything else needs at least `data:read`; write
@@ -109,6 +112,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         v1.include_router(module.router, dependencies=readers)
     v1.include_router(org.router)
     app.include_router(v1)
+    if configure_tracing(settings):
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app, excluded_urls="metrics,api/v1/health")
     return app
 
 

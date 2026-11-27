@@ -22,6 +22,7 @@ from starlette.requests import HTTPConnection
 
 from chainsight_api import ratelimit
 from chainsight_api.errors import ApiError
+from chainsight_api.metrics import AUTH_EVENTS, RATE_LIMITED
 from core.settings import Settings
 from core.timeutils import utcnow
 from database.session import get_sessionmaker, session_scope
@@ -85,6 +86,7 @@ async def _resolve(request: HTTPConnection, session: AsyncSession) -> Principal:
         claims = crypto.decode_access_token(settings, token)
         return await session_principal(session, claims)
     except crypto.InvalidToken as exc:
+        AUTH_EVENTS.labels(exc.code).inc()
         message = "Access token expired" if exc.code == "token_expired" else "Invalid token"
         raise _unauthorized(exc.code, message) from exc
     except AuthError as exc:
@@ -103,6 +105,7 @@ async def current_principal(
     if settings.rate_limit_enabled:
         d = await ratelimit.hit(principal.subject, settings.rate_limit_per_minute)
         if not d.allowed:
+            RATE_LIMITED.labels("principal").inc()
             raise ApiError(
                 429, "rate_limited", "Too many requests; slow down",
                 {"limit": d.limit, "retry_after_seconds": d.reset_in},

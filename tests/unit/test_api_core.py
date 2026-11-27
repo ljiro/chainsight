@@ -151,3 +151,25 @@ NOW = datetime(2026, 11, 25, 12, 0, tzinfo=UTC)
 )
 def test_compute_freshness(last: datetime | None, interval: int | None, expected: str) -> None:
     assert compute_freshness(last, interval, NOW) == expected
+
+
+def test_metrics_use_route_templates_and_can_require_a_token() -> None:
+    from core.settings import Settings
+
+    with TestClient(create_app(), raise_server_exceptions=False) as c:
+        c.get("/api/v1/health")
+        c.get("/api/v1/shipments/00000000-0000-0000-0000-000000000001")  # 401, but templated
+        body = c.get("/metrics").text
+    assert 'route="/api/v1/health"' in body
+    assert 'route="/api/v1/shipments/{shipment_id}"' in body
+    assert "00000000-0000-0000-0000-000000000001" not in body  # bounded cardinality
+    assert "chainsight_auth_events_total" in body
+
+    secured = Settings(_env_file=None, metrics_token="m" * 20)  # type: ignore[call-arg]
+    with TestClient(create_app(secured)) as c:
+        assert c.get("/metrics").status_code == 401
+        assert c.get("/metrics", headers={"Authorization": "Bearer " + "m" * 20}).status_code == 200
+
+
+def test_metrics_are_not_reachable_through_the_versioned_api(client: TestClient) -> None:
+    assert client.get("/api/v1/metrics").status_code == 404

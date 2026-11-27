@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from chainsight_api import ratelimit
 from chainsight_api.auth import client_ip, settings_of
 from chainsight_api.errors import REQUEST_ID_HEADER, error_response
+from chainsight_api.metrics import RATE_LIMITED
 from core.logging_config import get_logger
 
 log = get_logger("chainsight_api.access")
@@ -34,6 +35,7 @@ def install_middleware(app: FastAPI) -> None:
         ):
             d = await ratelimit.hit(f"ip:{client_ip(request)}", settings.rate_limit_per_minute)
             if not d.allowed:
+                RATE_LIMITED.labels("ip").inc()
                 response = error_response(
                     request, 429, "rate_limited", "Too many requests; slow down",
                     {"limit": d.limit, "retry_after_seconds": d.reset_in},

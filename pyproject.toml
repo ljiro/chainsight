@@ -28,6 +28,13 @@ dependencies = [
   "argon2-cffi>=23.1",
   "pyjwt>=2.9",
   "prometheus-client>=0.21",
+  "opentelemetry-sdk>=1.28",
+  "opentelemetry-exporter-otlp-proto-http>=1.28",
+  "opentelemetry-instrumentation-fastapi>=0.49b0",
+  "opentelemetry-instrumentation-sqlalchemy>=0.49b0",
+  "opentelemetry-instrumentation-httpx>=0.49b0",
+  "opentelemetry-instrumentation-redis>=0.49b0",
+  "opentelemetry-instrumentation-celery>=0.49b0",
 ]
 
 [dependency-groups]

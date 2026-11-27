@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from chainsight_api.auth import client_ip, settings_of
 from chainsight_api.errors import ApiError
+from chainsight_api.metrics import WEBHOOK_DELIVERIES
 from core.timeutils import utcnow
 from database.session import get_sessionmaker
 from services import audit
@@ -64,7 +65,9 @@ async def carrier_push(request: Request, carrier_code: str) -> Any:
                              "events_inserted": outcome.events_inserted},
                 )  # fmt: skip
     except wh.WebhookRejected as exc:
+        WEBHOOK_DELIVERIES.labels(code, exc.code).inc()
         raise ApiError(exc.status, exc.code, exc.message) from exc
+    WEBHOOK_DELIVERIES.labels(code, outcome.status).inc()
     body_out = {
         "status": outcome.status,
         "delivery_id": outcome.delivery_id,
