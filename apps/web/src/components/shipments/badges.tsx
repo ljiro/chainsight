@@ -45,6 +45,3 @@ export function formatDelay(hours: number): string {
   return h >= 48 ? `${sign}${(h / 24).toFixed(1)} d` : `${sign}${Math.round(h)} h`;
 }
 
-export function statusLabel(status: ShipmentStatus): string {
-  return STATUS[status];
-}

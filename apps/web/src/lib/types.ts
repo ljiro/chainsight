@@ -1,5 +1,5 @@
 // Mirrors the FastAPI response schemas (apps/api/chainsight_api/schemas).
-// TODO(phase-6): generate from /api/v1/openapi.json instead of hand-maintaining.
+// TODO(phase-8): generate from /api/v1/openapi.json once endpoints have response models.
 
 export type ComponentState = "ok" | "degraded" | "error";
 

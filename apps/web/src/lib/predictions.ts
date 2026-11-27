@@ -1,6 +1,6 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import { formatClock, formatTime } from "./utils";
-import type { DelayPrediction, EtaPrediction, ModelVersion } from "./types";
+import type { EtaPrediction, ModelVersion } from "./types";
 
 /** Same cut-offs the backend uses for risk_assessments.level (high >= 0.7, medium >= 0.4). */
 export function riskLevel(p: number): {
@@ -117,10 +117,6 @@ export function headlineMetrics(m: ModelVersion): { split: string; n: number | n
     add("MAE", num(x.mae_vessels), (v) => `${v.toFixed(2)} vessels`, "Mean absolute error of vessels in port");
   }
   return { split: ev.split, n: ev.n_samples, metrics: out };
-}
-
-export function sortDelay(items: DelayPrediction[]): DelayPrediction[] {
-  return [...items].sort((a, b) => b.delay_probability - a.delay_probability);
 }
 
 /** "13:10–15:40 UTC" on one day; full date-times when the range crosses midnight (UTC). */

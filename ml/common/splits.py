@@ -3,7 +3,6 @@ every split here is chronological, with an optional embargo gap between train an
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -36,22 +35,6 @@ def time_split(
     test = ordered[ordered[time_col] > cutoff + gap]
     assert_no_leakage(train, test, time_col)
     return TimeSplit(train, test, pd.Timestamp(cutoff))
-
-
-def walk_forward(
-    df: pd.DataFrame, time_col: str, *, n_folds: int = 4, min_train_fraction: float = 0.4
-) -> Iterator[TimeSplit]:
-    """Expanding-window folds: each fold trains on everything before its test window."""
-    ordered = df.sort_values(time_col).reset_index(drop=True)
-    start = int(len(ordered) * min_train_fraction)
-    fold = max(1, (len(ordered) - start) // n_folds)
-    for i in range(n_folds):
-        lo, hi = start + i * fold, start + (i + 1) * fold if i < n_folds - 1 else len(ordered)
-        if lo >= len(ordered) or hi <= lo:
-            break
-        train, test = ordered.iloc[:lo], ordered.iloc[lo:hi]
-        assert_no_leakage(train, test, time_col)
-        yield TimeSplit(train, test, pd.Timestamp(train[time_col].max()))
 
 
 def assert_no_leakage(train: pd.DataFrame, test: pd.DataFrame, time_col: str) -> None:
