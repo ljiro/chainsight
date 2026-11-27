@@ -1,0 +1,159 @@
+# Production deployment from published images (see docs/operations/deployment.md).
+#
+#   cp infrastructure/deployment/.env.production.example .env.production   # fill it in
+#   docker compose -f infrastructure/deployment/docker-compose.prod.yml --env-file .env.production up -d
+#
+# Only Caddy publishes ports (80/443). The database, Redis, API and web app are reachable on
+# the internal network only, and the API refuses to start with unsafe production settings.
+name: chainsight-prod
+
+x-image: &api-image ghcr.io/${GHCR_OWNER:?set GHCR_OWNER}/chainsight-api:${CHAINSIGHT_VERSION:?set CHAINSIGHT_VERSION}
+
+x-backend: &backend
+  image: *api-image
+  env_file: [{ path: ../../.env.production, required: false }]
+  environment: &backend-env
+    APP_ENV: production
+    LOG_FORMAT: json
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chainsight}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-chainsight}
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/1
+    CELERY_RESULT_BACKEND: redis://redis:6379/2
+    API_CORS_ORIGINS: https://${CHAINSIGHT_DOMAIN:?set CHAINSIGHT_DOMAIN}
+    JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+    AUTH_COOKIE_SECURE: "true"
+    TRUSTED_PROXY_COUNT: "1"
+    MODEL_ARTIFACT_DIR: /app/data/models
+    MLFLOW_TRACKING_URI: sqlite:////app/data/mlflow.db
+  volumes: [mldata:/app/data]
+  networks: [internal]
+  restart: unless-stopped
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chainsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-chainsight}
+    volumes: [pgdata:/home/postgres/pgdata]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chainsight} -d ${POSTGRES_DB:-chainsight}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [internal]
+    shm_size: 512m
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+    restart: unless-stopped
+    logging: *logging
+
+  migrate:
+    <<: *backend
+    command: ["sh", "-c", "alembic upgrade head && python -m services.ingestion.port_registry --if-empty"]
+    restart: "no"
+    depends_on: { db: { condition: service_healthy } }
+
+  api:
+    <<: *backend
+    # Several workers share metrics through PROMETHEUS_MULTIPROC_DIR, wiped at each start.
+    command: ["sh", "-c", "rm -rf /tmp/prometheus && mkdir -p /tmp/prometheus && exec uvicorn chainsight_api.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-2} --no-server-header"]
+    environment:
+      <<: *backend-env
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "services.worker.app", "worker", "-l", "INFO", "-Q", "default,ingest,ml",
+              "--concurrency", "${WORKER_CONCURRENCY:-2}"]
+    environment:
+      <<: *backend-env
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "services.worker.app", "beat", "-l", "INFO", "-s", "/tmp/celerybeat-schedule"]
+    healthcheck: { disable: true }
+    depends_on: { redis: { condition: service_healthy } }
+
+  ais-consumer:
+    <<: *backend
+    command: ["python", "-m", "services.ingestion.ais_consumer"]
+    restart: on-failure
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  web:
+    image: ghcr.io/${GHCR_OWNER}/chainsight-web:${CHAINSIGHT_VERSION}
+    networks: [internal]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.8-alpine
+    environment:
+      CHAINSIGHT_DOMAIN: ${CHAINSIGHT_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    networks: [internal]
+    depends_on: [web, api]
+    restart: unless-stopped
+    logging: *logging
+
+  backup:
+    image: timescale/timescaledb-ha:pg16
+    entrypoint: ["/scripts/run-scheduled.sh"]
+    user: root
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-chainsight}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-chainsight}
+      BACKUP_DIR: /backups
+      BACKUP_AT: ${BACKUP_AT:-02:30}
+    volumes:
+      - ../backup:/scripts:ro
+      - ${BACKUP_HOST_DIR:-/var/backups/chainsight}:/backups
+    networks: [internal]
+    depends_on: { db: { condition: service_healthy } }
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  internal:
+
+volumes:
+  pgdata:
+  redisdata:
+  mldata:
+  caddydata:
+  caddyconfig:

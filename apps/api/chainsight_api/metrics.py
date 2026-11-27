@@ -1,6 +1,10 @@
 """Prometheus metrics for the API, served at `/metrics` (outside `/api/v1`, so the web
 app's proxy never exposes it; protect it with METRICS_TOKEN outside a private network).
 
+With several uvicorn workers, set PROMETHEUS_MULTIPROC_DIR (an empty directory, wiped at
+container start): every worker then writes to shared files and `/metrics` aggregates them, so
+a scrape sees the whole container regardless of which worker answers.
+
 Labels use the *route template* (`/api/v1/shipments/{shipment_id}`), never the raw path, so
 cardinality stays bounded.
 """
@@ -8,6 +12,7 @@ cardinality stays bounded.
 from __future__ import annotations
 
 import hmac
+import os
 import time
 from collections.abc import Awaitable, Callable
 
@@ -25,9 +30,11 @@ from prometheus_client import (
 
 from core.settings import Settings
 
+MULTIPROCESS = bool(os.environ.get("PROMETHEUS_MULTIPROC_DIR"))
 REGISTRY = CollectorRegistry(auto_describe=True)
-process_collector.ProcessCollector(registry=REGISTRY)
-platform_collector.PlatformCollector(registry=REGISTRY)
+if not MULTIPROCESS:  # process metrics are per-process and unsupported in multiprocess mode
+    process_collector.ProcessCollector(registry=REGISTRY)
+    platform_collector.PlatformCollector(registry=REGISTRY)
 
 HTTP_REQUESTS = Counter(
     "chainsight_http_requests_total", "HTTP requests", ["method", "route", "status"],
@@ -38,8 +45,9 @@ HTTP_LATENCY = Histogram(
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30), registry=REGISTRY,
 )  # fmt: skip
 HTTP_IN_FLIGHT = Gauge(
-    "chainsight_http_requests_in_flight", "Requests in progress", registry=REGISTRY
-)
+    "chainsight_http_requests_in_flight", "Requests in progress", registry=REGISTRY,
+    multiprocess_mode="livesum",
+)  # fmt: skip
 AUTH_EVENTS = Counter(
     "chainsight_auth_events_total", "Authentication outcomes", ["event"], registry=REGISTRY
 )
@@ -53,7 +61,20 @@ WEBHOOK_DELIVERIES = Counter(
     "chainsight_webhook_deliveries_total", "Carrier webhook deliveries", ["carrier", "outcome"],
     registry=REGISTRY,
 )  # fmt: skip
-APP_INFO = Gauge("chainsight_app_info", "Build information", ["version", "env"], registry=REGISTRY)
+APP_INFO = Gauge(
+    "chainsight_app_info", "Build information", ["version", "env"], registry=REGISTRY,
+    multiprocess_mode="max",
+)  # fmt: skip
+
+
+def _exposition() -> bytes:
+    if not MULTIPROCESS:
+        return generate_latest(REGISTRY)
+    from prometheus_client import multiprocess
+
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)  # type: ignore[no-untyped-call]
+    return generate_latest(registry)
 
 
 def _route(request: Request) -> str:
@@ -98,4 +119,4 @@ def install_metrics(app: FastAPI, settings: Settings) -> None:
             given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
             if not hmac.compare_digest(given, token):
                 return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+        return Response(_exposition(), media_type=CONTENT_TYPE_LATEST)

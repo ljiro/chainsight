@@ -16,6 +16,9 @@ COPY apps/web ./
 # Next.js rewrites are resolved at BUILD time, so the API URL is a build arg.
 ARG API_INTERNAL_URL=http://api:8000
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
+# Inlined into the browser bundle at build time. "same-origin" = wss://<host>/api/v1/ws/...
+ARG NEXT_PUBLIC_LIVE_WS_URL=
+ENV NEXT_PUBLIC_LIVE_WS_URL=$NEXT_PUBLIC_LIVE_WS_URL
 RUN npm run build
 
 FROM node:22-alpine AS runtime

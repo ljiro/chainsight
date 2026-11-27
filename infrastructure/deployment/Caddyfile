@@ -1,0 +1,35 @@
+# Edge proxy: automatic HTTPS (Let's Encrypt) for CHAINSIGHT_DOMAIN.
+#
+# Caddy (>= 2.5) ignores X-Forwarded-For from untrusted clients and sets it to the real peer
+# address, which is what lets the API trust exactly one proxy hop (TRUSTED_PROXY_COUNT=1).
+{
+	email {$ACME_EMAIL}
+}
+
+{$CHAINSIGHT_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), camera=(), microphone=()"
+		-Server
+	}
+
+	# REST and the WebSocket go straight to the API; /metrics is deliberately not routed.
+	@api path /api/v1/*
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

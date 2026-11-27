@@ -32,6 +32,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Mount point for the shared ML volume; a fresh named volume inherits this ownership.
 RUN mkdir -p /app/data/models && chown -R app:app /app/data
 
+# Recorded on research runs (code_version) for reproducibility; set by CI.
+ARG GIT_SHA=
+ENV CHAINSIGHT_GIT_SHA=$GIT_SHA
+
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
