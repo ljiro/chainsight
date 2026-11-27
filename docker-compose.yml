@@ -8,7 +8,7 @@ x-backend: &backend
   env_file:
     - path: .env
       required: false
-  environment:
+  environment: &backend-env
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chainsight}:${POSTGRES_PASSWORD:-chainsight}@db:5432/${POSTGRES_DB:-chainsight}
     REDIS_URL: redis://redis:6379/0
     CELERY_BROKER_URL: redis://redis:6379/1
@@ -69,6 +69,12 @@ services:
 
   api:
     <<: *backend
+    environment:
+      <<: *backend-env
+      # Next.js forwards a client-supplied X-Forwarded-For unchanged, so it cannot be trusted
+      # on its own: leave this at 0 unless an edge proxy that *overwrites* the header sits in
+      # front (as in infrastructure/deployment/docker-compose.prod.yml, which uses 1).
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
     ports:
       - "8000:8000"
     depends_on:
@@ -80,6 +86,10 @@ services:
   worker:
     <<: *backend
     command: ["celery", "-A", "services.worker.app", "worker", "-l", "INFO", "-Q", "default,ingest,ml"]
+    environment:
+      <<: *backend-env
+      # Task metrics from the prefork children are aggregated here and served on :9808.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     healthcheck:
       disable: true
     depends_on:
@@ -124,7 +134,41 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # --- monitoring (opt-in): docker compose --profile monitoring up -d -------------------
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+
 volumes:
+  promdata:
+  grafanadata:
   pgdata:
   redisdata:
   mldata:

@@ -1,0 +1,45 @@
+groups:
+  - name: chainsight
+    rules:
+      - alert: ChainSightTargetDown
+        expr: up{job=~"api|worker|ais-consumer"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} is not reachable by Prometheus"
+
+      - alert: ChainSightApiErrorRate
+        expr: |
+          sum(rate(chainsight_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(chainsight_http_requests_total[5m])), 1e-9) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of API requests fail with 5xx"
+
+      - alert: ChainSightApiSlow
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(chainsight_http_request_duration_seconds_bucket{route!~".*/research/.*"}[5m]))) > 2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "API p95 latency above 2 s (research analyses excluded)"
+
+      - alert: ChainSightLoginFailures
+        expr: sum(increase(chainsight_auth_events_total{event="login_failed"}[15m])) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: "Unusual number of failed sign-ins (possible credential stuffing)"
+
+      - alert: ChainSightAisIngestionStalled
+        expr: time() - max(chainsight_ais_last_window_timestamp_seconds) > 600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "No AIS ingestion window closed in the last 10 minutes"
+
+      - alert: ChainSightCeleryFailures
+        expr: sum by (task) (increase(chainsight_celery_tasks_total{state="FAILURE"}[1h])) > 3
+        labels: { severity: warning }
+        annotations:
+          summary: "Celery task {{ $labels.task }} failed more than 3 times in an hour"
